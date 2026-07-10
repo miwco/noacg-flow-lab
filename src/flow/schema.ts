@@ -54,7 +54,7 @@ export type FlowProject = {
   events: FlowEvent[];
   variables: FlowVariable[];
   transitions: FlowTransition[];
-  metadata?: { reference?: "quiz" };
+  metadata?: { reference?: "quiz" | "lower-third" };
 };
 
 export type FlowEventPayload = { id: string; value?: FlowValue };
