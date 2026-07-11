@@ -27,7 +27,13 @@ Start by reading `AGENTS.md`, `CLAUDE.md`, `README.md`, `tutorial2.md`, and this
 4. Operator actions must be derived from the runtime and only show legal actions.
 5. Keep the app static and deployable to GitHub Pages and Vercel with no backend or secrets.
 
-## Recommended next work
+## Safer authoring iteration completed
+
+The transition editor now stages edits with Save and Discard, provides a readable summary, supports typed value sources, and blocks duplicate or impossible routes. Explicitly permitted runtime variables can be edited before Take. Standalone exports select a quiz or lower-third renderer contract, and focused validation/export tests cover the new behavior.
+
+The transition strip remains as a reliable fallback because global and parallel conditional transitions are not always easy to select as visual edges. Do not remove it until edge selection preserves that clarity.
+
+## Previous recommendation
 
 The next highest-value iteration is **make the authoring loop safer and more expressive without adding breadth**:
 

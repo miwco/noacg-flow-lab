@@ -5,6 +5,8 @@ export type FlowVariable = {
   label: string;
   type: "string" | "number" | "boolean";
   defaultValue: FlowValue;
+  operatorEditable?: boolean;
+  options?: FlowValue[];
 };
 
 export type FlowState = {
@@ -54,7 +56,7 @@ export type FlowProject = {
   events: FlowEvent[];
   variables: FlowVariable[];
   transitions: FlowTransition[];
-  metadata?: { reference?: "quiz" | "lower-third" };
+  metadata?: { reference?: "quiz" | "lower-third"; renderer?: "quiz" | "lower-third" };
 };
 
 export type FlowEventPayload = { id: string; value?: FlowValue };

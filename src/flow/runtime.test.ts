@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { quizProject } from "./quiz-project";
-import { createRuntime, dispatchEvent } from "./runtime";
+import { createRuntime, dispatchEvent, setRuntimeVariable } from "./runtime";
 
 function fire(runtime = createRuntime(quizProject), id: string, value?: string) {
   return dispatchEvent(quizProject, runtime, { id, value });
@@ -49,5 +49,13 @@ describe("Flow runtime - quiz reference", () => {
     expect(reset.ok).toBe(true);
     expect(reset.runtime.stateId).toBe("off");
     expect(reset.runtime.variables.selectedAnswer).toBeNull();
+  });
+
+  it("allows permitted data edits only before Take", () => {
+    const ready = setRuntimeVariable(quizProject, createRuntime(quizProject), "correctAnswer", "D");
+    expect(ready.variables.correctAnswer).toBe("D");
+    expect(setRuntimeVariable(quizProject, ready, "selectedAnswer", "A")).toBe(ready);
+    const onAir = fire(ready, "TAKE").runtime;
+    expect(setRuntimeVariable(quizProject, onAir, "correctAnswer", "A")).toBe(onAir);
   });
 });

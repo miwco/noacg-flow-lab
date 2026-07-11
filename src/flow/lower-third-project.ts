@@ -6,7 +6,7 @@ export const lowerThirdProject: FlowProject = {
   name: "Interview lower third",
   description: "A compact reference flow for taking a lower third in, holding it, and taking it out.",
   initialStateId: "off",
-  metadata: { reference: "lower-third" },
+  metadata: { reference: "lower-third", renderer: "lower-third" },
   states: [
     { id: "off", label: "OFF", description: "The lower third is not on air.", position: { x: 0, y: 170 } },
     { id: "in", label: "IN", description: "The name strap is animating on air.", position: { x: 220, y: 170 } },
@@ -19,8 +19,8 @@ export const lowerThirdProject: FlowProject = {
     { id: "RESET", label: "Reset", description: "Restore the clean initial state." },
   ],
   variables: [
-    { id: "name", label: "Name", type: "string", defaultValue: "Maya Okafor" },
-    { id: "role", label: "Role", type: "string", defaultValue: "Election analyst" },
+    { id: "name", label: "Name", type: "string", defaultValue: "Maya Okafor", operatorEditable: true },
+    { id: "role", label: "Role", type: "string", defaultValue: "Election analyst", operatorEditable: true },
   ],
   transitions: [
     { id: "take", from: "off", to: "in", event: "TAKE", label: "Take in", actions: [{ type: "play-animation", animation: "lower-third-in" }] },

@@ -6,6 +6,12 @@ https://miwco.github.io/noacg-flow-lab/
 
 ## What this version adds
 
+- Stage transition edits with a readable summary, unsaved feedback, and Save or Discard controls.
+- Use typed string, number, and boolean literals in conditions and set-variable actions.
+- Block duplicate or impossible transition edits with a plain-language explanation.
+- Edit explicitly permitted runtime data before Take, separately from transitions.
+- Render the quiz and lower third faithfully in standalone HTML exports.
+
 - Edit a transition's label, source state, destination state, and event.
 - Add one clear condition using a variable and a simple rule.
 - Add, edit, and remove named actions.
@@ -15,6 +21,8 @@ https://miwco.github.io/noacg-flow-lab/
 - Press the `?` button for the operator sequence and the authoring sequence.
 
 ## Step-by-step authoring workflow
+
+Before following the original walkthrough below, note that transition changes now stay in a draft until **Save transition** is pressed. Typed values can come from a literal, another variable, or the incoming event. The **Runtime data** panel permits approved values to be prepared before Take and locks them once the graphic is on air.
 
 1. Open the live prototype and choose **Quiz reference** from the top-right picker.
 2. Press the `?` button. The operator panel shows the suggested live order, while the graph shows the authoring order.

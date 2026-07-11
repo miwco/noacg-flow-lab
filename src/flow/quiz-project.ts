@@ -6,7 +6,7 @@ export const quizProject: FlowProject = {
   name: "Quiz question",
   description: "A broadcast quiz reference flow with safe operator actions.",
   initialStateId: "off",
-  metadata: { reference: "quiz" },
+  metadata: { reference: "quiz", renderer: "quiz" },
   states: [
     { id: "off", label: "OFF", description: "Graphic is not on air.", position: { x: 0, y: 170 } },
     { id: "question", label: "QUESTION", description: "Question is on air and ready for a choice.", position: { x: 190, y: 170 } },
@@ -24,7 +24,7 @@ export const quizProject: FlowProject = {
   ],
   variables: [
     { id: "selectedAnswer", label: "Selected answer", type: "string", defaultValue: null },
-    { id: "correctAnswer", label: "Correct answer", type: "string", defaultValue: "C" },
+    { id: "correctAnswer", label: "Correct answer", type: "string", defaultValue: "C", operatorEditable: true, options: ["A", "B", "C", "D"] },
   ],
   transitions: [
     { id: "take", from: "off", to: "question", event: "TAKE", label: "Take", actions: [{ type: "play-animation", animation: "question-in" }] },

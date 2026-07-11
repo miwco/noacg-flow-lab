@@ -14,6 +14,15 @@ export function createRuntime(project: FlowProject): RuntimeState {
   return { stateId: project.initialStateId, variables: Object.fromEntries(project.variables.map((variable) => [variable.id, variable.defaultValue])), revision: 0 };
 }
 
+export function setRuntimeVariable(project: FlowProject, runtime: RuntimeState, variableId: string, value: FlowValue): RuntimeState {
+  const variable = project.variables.find((item) => item.id === variableId);
+  if (!variable?.operatorEditable || runtime.stateId !== project.initialStateId) return runtime;
+  const validType = value === null || typeof value === variable.type;
+  const validOption = !variable.options?.length || variable.options.includes(value);
+  if (!validType || !validOption) return runtime;
+  return { ...runtime, variables: { ...runtime.variables, [variableId]: value }, revision: runtime.revision + 1 };
+}
+
 function resolveValue(reference: ValueReference | undefined, variables: Record<string, FlowValue>, event: FlowEventPayload): FlowValue {
   if (reference && typeof reference === "object") {
     if ("variable" in reference) return variables[reference.variable];

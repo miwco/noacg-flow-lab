@@ -7,8 +7,8 @@ import { AlertCircle, Check, CircleDot, CircleHelp, CodeXml, Download, FileUp, L
 import { quizProject } from "@/flow/quiz-project";
 import { lowerThirdProject } from "@/flow/lower-third-project";
 import { compileStandaloneHtml } from "@/flow/html-export";
-import { availableEvents, createRuntime, dispatchEvent, type RuntimeState } from "@/flow/runtime";
-import type { FlowAction, FlowCondition, FlowProject, FlowTransition, FlowValue } from "@/flow/schema";
+import { availableEvents, createRuntime, dispatchEvent, setRuntimeVariable, type RuntimeState } from "@/flow/runtime";
+import type { FlowAction, FlowCondition, FlowProject, FlowTransition, FlowValue, FlowVariable, ValueReference } from "@/flow/schema";
 import { validateProject } from "@/flow/validation";
 
 type Selection = { kind: "state" | "transition"; id: string } | null;
@@ -104,7 +104,6 @@ export default function FlowLab() {
   const state = selection?.kind === "state" ? project.states.find((item) => item.id === selection.id) : undefined;
   const transition = selection?.kind === "transition" ? project.transitions.find((item) => item.id === selection.id) : undefined;
   const stateName = project.states.find((item) => item.id === runtime.stateId)?.label || runtime.stateId;
-  const featuredTransitions = project.transitions.filter((item, index, list) => item.from !== "*" && item.from !== item.to && list.findIndex((other) => other.from === item.from && other.to === item.to && other.event === item.event) === index);
 
   const nodes = useMemo<Node<StateData>[]>(() => project.states.map((item) => ({
     id: item.id,
@@ -218,14 +217,14 @@ export default function FlowLab() {
           {project.metadata?.reference === "lower-third" ? <LowerThirdPreview runtime={runtime} /> : <QuizPreview runtime={runtime} />}
           <div className="preview-foot"><span><Sparkles size={14} /> {runtime.lastAnimation ? `Animation: ${runtime.lastAnimation}` : "Waiting for first transition"}</span><span>16:9 output</span></div>
         </section>
-        <section className="panel runtime-panel"><Title eyebrow="Runtime" title="Live values" /><div className="variable-list">{project.variables.map((item) => <div key={item.id}><span>{item.label}<small>{item.id}</small></span><strong>{runtime.variables[item.id] === null ? "-" : String(runtime.variables[item.id])}</strong></div>)}</div></section>
+        <section className="panel runtime-panel"><Title eyebrow="Runtime data" title={runtime.stateId === project.initialStateId ? "Ready to edit" : "Live values"} /><div className="variable-list">{project.variables.map((item) => <div key={item.id}><span>{item.label}<small>{item.id}</small></span>{item.operatorEditable && runtime.stateId === project.initialStateId ? <RuntimeValueInput variable={item} value={runtime.variables[item.id]} onChange={(value) => setRuntime((current) => setRuntimeVariable(project, current, item.id, value))} /> : <strong>{runtime.variables[item.id] === null ? "-" : String(runtime.variables[item.id])}</strong>}</div>)}</div>{project.variables.some((item) => item.operatorEditable) && <p className="data-note">Editable data is separate from transitions and locks when the graphic leaves its initial state.</p>}</section>
       </div>
 
       <section className="panel graph-panel">
         <Title eyebrow="State graph" title={project.name} right={<div className="graph-actions"><button onClick={addState}><Plus size={14} /> State</button><button onClick={() => setNotice("Drag from a state handle to another state to connect them.")}><Link2 size={14} /> Connect</button></div>} />
         {guidedMode && <div className="author-guide"><span><b>1</b> Add stable states</span><span><b>2</b> Connect the legal paths</span><span><b>3</b> Select a transition to configure its logic</span></div>}
         <div className="graph-canvas"><ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onConnect={onConnect} onNodeClick={(_, node) => setSelection({ kind: "state", id: node.id })} onEdgeClick={(_, edge) => setSelection({ kind: "transition", id: edge.id })} onInit={(instance) => { graphInstance.current = instance; window.setTimeout(() => instance.fitView({ padding: 0.12 }), 0); }} fitView minZoom={0.4} maxZoom={1.5} proOptions={{ hideAttribution: true }}><Background color="#263558" gap={20} size={1} /><MiniMap nodeColor={(node) => node.id === runtime.stateId ? "#79a6ff" : "#26385d"} maskColor="rgba(8,12,25,.7)" /><Controls showInteractive={false} /></ReactFlow></div>
-        <div className="graph-transition-strip"><span>TRANSITIONS</span>{featuredTransitions.map((item) => <button key={item.id} className={runtime.lastTransitionId === item.id ? "fired" : ""} onClick={() => setSelection({ kind: "transition", id: item.id })}>{item.event}</button>)}</div>
+        <div className="graph-transition-strip"><span>TRANSITIONS</span>{project.transitions.map((item) => <button key={item.id} className={`${runtime.lastTransitionId === item.id ? "fired" : ""} ${selection?.kind === "transition" && selection.id === item.id ? "selected" : ""}`} onClick={() => setSelection({ kind: "transition", id: item.id })}>{item.label || item.event}</button>)}</div>
         <div className="graph-note"><span><i className="dot live" /> Active state</span><span><i className="dot fired" /> Last transition</span><span>Global: {project.transitions.filter((item) => item.from === "*").map((item) => item.label).join(" · ")}</span></div>
       </section>
 
@@ -245,7 +244,7 @@ export default function FlowLab() {
           {transition && <div className="inspector-content"><label>Trigger<select value={transition.event} onChange={(event) => setProject((current) => ({ ...current, transitions: current.transitions.map((item) => item.id === transition.id ? { ...item, event: event.target.value, label: event.target.value } : item) }))}>{project.events.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><Info label="From" value={transition.from === "*" ? "Any state (global)" : project.states.find((item) => item.id === transition.from)?.label || transition.from} /><Info label="To" value={project.states.find((item) => item.id === transition.to)?.label || transition.to} /><Info label="Condition" value={conditionText(transition.condition)} /><div className="action-list"><small>ACTIONS</small>{transition.actions.map((action, index) => <div key={index}><b>{index + 1}</b>{actionText(action)}</div>)}</div></div>}
         </section>
 
-        {transition && <TransitionEditor transition={transition} project={project} onChange={updateTransition} onDelete={() => removeTransition(transition.id)} />}
+        {transition && <SafeTransitionEditor key={transition.id} transition={transition} project={project} onSave={updateTransition} onDelete={() => removeTransition(transition.id)} />}
 
         <section className="panel validation-panel"><Title eyebrow="Flow health" title={diagnostics.some((item) => item.level === "error") ? "Needs attention" : "Looking good"} />{diagnostics.length ? diagnostics.map((item, index) => <div className={`diagnostic ${item.level}`} key={index}><AlertCircle size={14} />{item.message}</div>) : <div className="diagnostic okay"><Check size={14} /> No structural issues found.</div>}<button className="text-action" onClick={addVariable}><Plus size={14} /> Define variable</button><button className="text-action" onClick={restoreReference}><RotateCcw size={14} /> Restore quiz reference</button></section>
       </div>
@@ -257,7 +256,7 @@ function Title({ eyebrow, title, right }: { eyebrow: string; title: string; righ
 function Info({ label, value }: { label: string; value: string }) { return <div className="info-row"><small>{label}</small><span>{value}</span></div>; }
 function StepBadge({ step }: { step: number }) { return <span className="step-badge" aria-label={`Step ${step}`}>{step}</span>; }
 
-function TransitionEditor({ transition, project, onChange, onDelete }: { transition: FlowTransition; project: FlowProject; onChange: (transition: FlowTransition) => void; onDelete: () => void }) {
+export function TransitionEditor({ transition, project, onChange, onDelete }: { transition: FlowTransition; project: FlowProject; onChange: (transition: FlowTransition) => void; onDelete: () => void }) {
   const condition = transition.condition;
   const updateAction = (index: number, action: FlowAction) => onChange({ ...transition, actions: transition.actions.map((item, itemIndex) => itemIndex === index ? action : item) });
   return <section className="panel transition-editor">
@@ -272,6 +271,46 @@ function TransitionEditor({ transition, project, onChange, onDelete }: { transit
       <button className="delete-transition" onClick={onDelete}>Delete transition</button>
     </div>
   </section>;
+}
+
+function parseLiteral(raw: string, type: FlowVariable["type"]): FlowValue {
+  if (type === "number") return raw === "" ? null : Number(raw);
+  if (type === "boolean") return raw === "true";
+  return raw;
+}
+
+function ValueReferenceEditor({ value, variable, variables, onChange }: { value?: ValueReference; variable?: FlowVariable; variables: FlowVariable[]; onChange: (value: ValueReference) => void }) {
+  const kind = value && typeof value === "object" ? "variable" in value ? "variable" : "event" : "literal";
+  const type = variable?.type || "string";
+  return <div className="value-reference"><label>Value source<select value={kind} onChange={(event) => onChange(event.target.value === "variable" ? { variable: variables[0]?.id || "" } : event.target.value === "event" ? { eventValue: true } : type === "boolean" ? false : type === "number" ? 0 : "")}><option value="literal">Typed value</option><option value="variable">Another variable</option><option value="event">Event value</option></select></label>{kind === "variable" ? <label>Variable<select value={typeof value === "object" && value && "variable" in value ? value.variable : ""} onChange={(event) => onChange({ variable: event.target.value })}>{variables.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label> : kind === "literal" ? <label>{type} value{type === "boolean" ? <select value={String(value ?? false)} onChange={(event) => onChange(event.target.value === "true")}><option value="true">True</option><option value="false">False</option></select> : <input type={type === "number" ? "number" : "text"} value={value === null || typeof value === "object" ? "" : String(value)} onChange={(event) => onChange(parseLiteral(event.target.value, type))} />}</label> : <p>Uses the value supplied with the event.</p>}</div>;
+}
+
+function SafeTransitionEditor({ transition, project, onSave, onDelete }: { transition: FlowTransition; project: FlowProject; onSave: (transition: FlowTransition) => void; onDelete: () => void }) {
+  const [draft, setDraft] = useState(transition);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(transition);
+  const condition = draft.condition;
+  const candidate = { ...project, transitions: project.transitions.map((item) => item.id === draft.id ? draft : item) };
+  const errors = validateProject(candidate).filter((item) => item.level === "error" && item.transitionId === draft.id);
+  const updateAction = (index: number, action: FlowAction) => setDraft({ ...draft, actions: draft.actions.map((item, actionIndex) => actionIndex === index ? action : item) });
+  const from = draft.from === "*" ? "any state" : project.states.find((item) => item.id === draft.from)?.label || draft.from;
+  const to = project.states.find((item) => item.id === draft.to)?.label || draft.to;
+  return <section className="panel transition-editor"><Title eyebrow="Edit transition" title={draft.label || draft.event} right={<span className={`draft-status ${dirty ? "dirty" : ""}`}>{dirty ? "Unsaved changes" : "Saved"}</span>} /><div className="transition-form">
+    <div className="transition-summary"><small>WHEN</small><strong>{draft.event}</strong><span>moves <b>{from}</b> to <b>{to}</b> when {conditionText(condition).toLowerCase()}.</span></div>
+    <label>Label<input value={draft.label || ""} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></label>
+    <label>From<select value={draft.from} onChange={(event) => setDraft({ ...draft, from: event.target.value })}><option value="*">Any state</option>{project.states.map((state) => <option key={state.id} value={state.id}>{state.label}</option>)}</select></label>
+    <label>To<select value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })}>{project.states.map((state) => <option key={state.id} value={state.id}>{state.label}</option>)}</select></label>
+    <label>Event<select value={draft.event} onChange={(event) => setDraft({ ...draft, event: event.target.value })}>{project.events.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+    <div className="condition-editor"><div><small>CONDITION</small>{condition ? <button onClick={() => setDraft({ ...draft, condition: undefined })}>Clear</button> : <button onClick={() => setDraft({ ...draft, condition: { left: { variable: project.variables[0]?.id || "" }, operator: "is-set" } })}>Add condition</button>}</div>{condition && <><label>Variable<select value={condition.left.variable} onChange={(event) => setDraft({ ...draft, condition: { ...condition, left: { variable: event.target.value } } })}>{project.variables.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><label>Rule<select value={condition.operator} onChange={(event) => setDraft({ ...draft, condition: { ...condition, operator: event.target.value as FlowCondition["operator"], right: event.target.value.startsWith("is-") ? undefined : condition.right ?? "" } })}><option value="is-set">has a value</option><option value="is-not-set">has no value</option><option value="equals">equals</option><option value="not-equals">does not equal</option></select></label>{!condition.operator.startsWith("is-") && <ValueReferenceEditor value={condition.right} variable={project.variables.find((item) => item.id === condition.left.variable)} variables={project.variables} onChange={(right) => setDraft({ ...draft, condition: { ...condition, right } })} />}</>}</div>
+    <div className="transition-actions"><div><small>ACTIONS</small><button onClick={() => setDraft({ ...draft, actions: [...draft.actions, { type: "play-animation", animation: "new-animation" }] })}>Add action</button></div>{draft.actions.map((action, index) => <div className="editable-action" key={index}><select value={action.type} onChange={(event) => updateAction(index, event.target.value === "set-variable" ? { type: "set-variable", variable: project.variables[0]?.id || "", value: "" } : { type: "play-animation", animation: "new-animation" })}><option value="play-animation">Play animation</option><option value="set-variable">Set variable</option></select>{action.type === "play-animation" ? <input value={action.animation} onChange={(event) => updateAction(index, { ...action, animation: event.target.value })} /> : action.type === "set-variable" ? <><select value={action.variable} onChange={(event) => updateAction(index, { ...action, variable: event.target.value })}>{project.variables.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select><ValueReferenceEditor value={action.value} variable={project.variables.find((item) => item.id === action.variable)} variables={project.variables} onChange={(value) => updateAction(index, { ...action, value })} /></> : <input value={action.event} onChange={(event) => updateAction(index, { ...action, event: event.target.value })} />}<button className="remove-action" onClick={() => setDraft({ ...draft, actions: draft.actions.filter((_, actionIndex) => actionIndex !== index) })}>×</button></div>)}</div>
+    {errors.map((error, index) => <div className="edit-error" key={index}><AlertCircle size={14} />{error.message}</div>)}
+    <div className="edit-actions"><button className="save-transition" disabled={!dirty || errors.length > 0} onClick={() => onSave(draft)}>Save transition</button><button disabled={!dirty} onClick={() => setDraft(transition)}>Discard</button></div><button className="delete-transition" onClick={onDelete}>Delete transition</button>
+  </div></section>;
+}
+
+function RuntimeValueInput({ variable, value, onChange }: { variable: FlowVariable; value: FlowValue; onChange: (value: FlowValue) => void }) {
+  if (variable.options?.length) return <select className="runtime-input" aria-label={variable.label} value={String(value ?? "")} onChange={(event) => onChange(parseLiteral(event.target.value, variable.type))}>{variable.options.map((option) => <option key={String(option)}>{String(option)}</option>)}</select>;
+  if (variable.type === "boolean") return <select className="runtime-input" aria-label={variable.label} value={String(value ?? false)} onChange={(event) => onChange(event.target.value === "true")}><option value="true">True</option><option value="false">False</option></select>;
+  return <input className="runtime-input" aria-label={variable.label} type={variable.type === "number" ? "number" : "text"} value={value === null ? "" : String(value)} onChange={(event) => onChange(parseLiteral(event.target.value, variable.type))} />;
 }
 
 function LowerThirdPreview({ runtime }: { runtime: RuntimeState }) {

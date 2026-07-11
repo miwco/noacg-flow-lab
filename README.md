@@ -17,6 +17,9 @@ The reference project is an original, broadcast-inspired quiz graphic. It implem
 - The state graph highlights the live state and most recently fired transition.
 - States, transitions, variables, conditions, and actions can be inspected. State names and descriptions are editable; states and variables can be added; nodes can be moved; graph handles create new connections.
 - Projects persist in browser local storage and can be exported/imported as readable JSON.
+- Transition edits are staged, summarized, type-aware, and checked for impossible or duplicate routes before save.
+- Permitted runtime data can be prepared before Take without turning data changes into state transitions.
+- Standalone HTML export includes renderer contracts for both reference graphics.
 - Desktop is a working creative-tool layout. Phone layouts intentionally switch between Preview, Flow, Controls, and Inspect modes.
 
 ## Behavioral model
@@ -75,7 +78,7 @@ Import this repository into Vercel, select the default Next.js preset, and deplo
 - Conditions currently cover simple variable comparisons and set/not-set checks.
 - Actions are typed but only preview-facing animation and variable actions are demonstrated.
 - Connection creation and basic state/variable editing are intentionally lightweight. Rich transition/action authoring needs further UX research before expanding it.
-- This version exports/imports Flow JSON; a standalone HTML compiler is the next technical experiment, not a claim of playout-system compatibility.
+- The standalone HTML player proves portable Flow JSON execution and reference rendering, but is not a playout-system compatibility claim.
 
 ## Direction
 
