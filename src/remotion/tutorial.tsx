@@ -5,8 +5,8 @@ const scenes = [
   { eyebrow: "1  STATES FIRST", title: "Model stable on-air situations.", copy: "Changing content remains typed data, never a state explosion.", accent: "#74e2c0", nodes: ["OFF", "QUESTION", "SELECTED", "LOCKED", "RESULT"] },
   { eyebrow: "2  ORDERED BRANCHES", title: "Make every decision deterministic.", copy: "Explicit priority and validation replace hidden transition order.", accent: "#f6bc56", nodes: ["REVEAL", "1 Correct", "2 Wrong"] },
   { eyebrow: "3  TYPED CONDITIONS", title: "Express logic without scripts.", copy: "Combine typed predicates with one readable AND or OR group.", accent: "#a69bff", nodes: ["Variable", "Rule", "Typed value"] },
-  { eyebrow: "4  SIMULATE", title: "See exactly why a path fired.", copy: "Run legal events, inspect every guard, and step back safely.", accent: "#ff9aa5", nodes: ["Event", "Trace", "Step back"] },
-  { eyebrow: "5  DATA CONTRACT", title: "Keep changing data out of states.", copy: "Typed payloads and variables form a stable runtime contract.", accent: "#79d3ff", nodes: ["Payload", "Variables", "Renderer"] },
+  { eyebrow: "4  SIMULATE", title: "See exactly why a path fired.", copy: "Inspect every guard, step back, and save repeatable scenarios.", accent: "#ff9aa5", nodes: ["Event", "Trace", "Replay"] },
+  { eyebrow: "5  DATA CONTRACT", title: "Author controls from typed data.", copy: "Define payloads, options, ranges, and operator-editable variables visually.", accent: "#79d3ff", nodes: ["Fields", "Options", "Preview"] },
   { eyebrow: "6  EXPORT", title: "Take the same Flow runtime with you.", copy: "Export normalized v2 JSON or a self-contained HTML player.", accent: "#74e2c0", nodes: ["Flow v2", "Standalone HTML"] },
   { eyebrow: "7  FUTURE PACKAGES", title: "Compose graphics, not state explosions.", copy: "Independent Flow controllers can share one future broadcast control room.", accent: "#8ab1ff", nodes: ["Quiz", "Lower third", "Score bug"] },
 ];

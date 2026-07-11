@@ -17,6 +17,31 @@ export function validateProject(project: FlowProject): FlowDiagnostic[] {
   const stateIds = new Set<string>();
   project.states.forEach((state) => { if (stateIds.has(state.id)) diagnostics.push({ level: "error", message: `Two states use the ID "${state.id}". Each state needs its own ID.` }); stateIds.add(state.id); });
   if (!stateIds.has(project.initialStateId)) diagnostics.push({ level: "error", message: "Choose an initial state before this flow can run." });
+  const eventIds = new Set<string>();
+  project.events.forEach((event) => {
+    if (!event.id.trim()) diagnostics.push({ level: "error", message: "Every event needs an ID." });
+    if (eventIds.has(event.id)) diagnostics.push({ level: "error", message: `Two events use the ID "${event.id}".` });
+    eventIds.add(event.id);
+    const fieldIds = new Set<string>();
+    event.payload?.forEach((field) => {
+      if (!field.id.trim()) diagnostics.push({ level: "error", message: `${event.label} has a payload field without an ID.` });
+      if (fieldIds.has(field.id)) diagnostics.push({ level: "error", message: `${event.label} has two payload fields named "${field.id}".` });
+      fieldIds.add(field.id);
+      if (field.type === "number" && field.minimum !== undefined && field.maximum !== undefined && field.minimum > field.maximum) diagnostics.push({ level: "error", message: `${event.label} field ${field.label} has a minimum above its maximum.` });
+      if (field.step !== undefined && field.step <= 0) diagnostics.push({ level: "error", message: `${event.label} field ${field.label} needs a positive step.` });
+    });
+    if (event.source === "animation-complete" && !event.animation?.trim()) diagnostics.push({ level: "error", message: `${event.label} needs the animation name it waits for.` });
+  });
+  const variableIds = new Set<string>();
+  project.variables.forEach((variable) => {
+    if (!variable.id.trim()) diagnostics.push({ level: "error", message: "Every variable needs an ID." });
+    if (variableIds.has(variable.id)) diagnostics.push({ level: "error", message: `Two variables use the ID "${variable.id}".` });
+    variableIds.add(variable.id);
+    if (variable.defaultValue !== null && typeof variable.defaultValue !== variable.type) diagnostics.push({ level: "error", message: `${variable.label}'s default value must be a ${variable.type}.` });
+    if (variable.options?.length && !variable.options.includes(variable.defaultValue)) diagnostics.push({ level: "warning", message: `${variable.label}'s default value is not one of its options.` });
+    if (variable.type === "number" && variable.minimum !== undefined && variable.maximum !== undefined && variable.minimum > variable.maximum) diagnostics.push({ level: "error", message: `${variable.label} has a minimum above its maximum.` });
+    if (variable.step !== undefined && variable.step <= 0) diagnostics.push({ level: "error", message: `${variable.label} needs a positive step.` });
+  });
   const events = new Map(project.events.map((event) => [event.id, event]));
   const variables = new Map(project.variables.map((variable) => [variable.id, variable]));
   const groups = new Map<string, FlowTransition[]>();
@@ -49,7 +74,15 @@ export function validateProject(project: FlowProject): FlowDiagnostic[] {
         const type = literalType(action.value);
         if (!variable) add(`"${action.variable}" is set by "${name(transition)}" but is not a defined variable.`);
         else if (type && type !== "null" && type !== variable.type) add(`"${name(transition)}" sets ${variable.label} to a ${type} value. Use a ${variable.type} value instead.`);
-      } else if (action.type === "emit" && !events.has(action.event)) add(`"${name(transition)}" emits an event that is not defined.`);
+      } else if (action.type === "emit") {
+        const emitted = events.get(action.event);
+        if (!emitted) add(`"${name(transition)}" emits an event that is not defined.`);
+        else {
+          const supplied = new Set(Object.keys(action.data ?? {}));
+          emitted.payload?.filter((field) => field.required).forEach((field) => { if (!supplied.has(field.id)) add(`"${name(transition)}" emits ${emitted.label} without required field "${field.id}".`); });
+          supplied.forEach((field) => { if (!emitted.payload?.some((item) => item.id === field)) add(`"${name(transition)}" emits unknown ${emitted.label} field "${field}".`); });
+        }
+      }
     });
     const key = `${transition.from}\u0000${transition.event}`;
     groups.set(key, [...(groups.get(key) ?? []), transition]);

@@ -19,4 +19,18 @@ describe("edited project validation", () => {
     const project = { ...quizProject, variables: quizProject.variables.map((item) => item.id === "correctAnswer" ? { ...item, type: "number" as const, defaultValue: 3 } : item), transitions: quizProject.transitions.map((item) => item.id === "reveal-correct" ? { ...item, condition: { mode: "all" as const, predicates: [{ left: { variable: "correctAnswer" }, operator: "equals" as const, right: "C" }] } } : item) };
     expect(validateProject(project).some((item) => item.message.includes("Use a number value"))).toBe(true);
   });
+
+  it("validates data contract constraints", () => {
+    const project = { ...quizProject, variables: [...quizProject.variables, { id: "score", label: "Score", type: "number" as const, defaultValue: "zero", minimum: 10, maximum: 2, step: 0 }] };
+    const messages = validateProject(project).map((item) => item.message);
+    expect(messages.some((message) => message.includes("default value must be a number"))).toBe(true);
+    expect(messages.some((message) => message.includes("minimum above its maximum"))).toBe(true);
+    expect(messages.some((message) => message.includes("positive step"))).toBe(true);
+  });
+
+  it("requires emitted event payload fields", () => {
+    const events = [...quizProject.events, { id: "UPDATE", label: "Update", source: "external" as const, payload: [{ id: "score", label: "Score", type: "number" as const, required: true }] }];
+    const transitions = quizProject.transitions.map((item) => item.id === "take" ? { ...item, actions: [...item.actions, { type: "emit" as const, event: "UPDATE" }] } : item);
+    expect(validateProject({ ...quizProject, events, transitions }).some((item) => item.message.includes("without required field"))).toBe(true);
+  });
 });

@@ -23,6 +23,8 @@ The reference project is an original, broadcast-inspired quiz graphic. It implem
 - Flow JSON v2 gives guarded branches explicit priority, supports bounded AND/OR conditions, and migrates version 1 projects on load.
 - Design and Simulate modes share one runtime; simulation explains branch decisions and supports stepping back.
 - Legal-event descriptors carry typed payload and presentation metadata for generic or specialized controls.
+- Event and variable contracts are authored visually with types, options, required fields, ranges, and generated-control previews.
+- Simulation runs can be saved locally as scenarios, replayed from a clean runtime, and inspected through a selectable event timeline.
 - Desktop is a working creative-tool layout. Phone layouts intentionally switch between Preview, Flow, Controls, and Inspect modes.
 
 ## Behavioral model
@@ -69,7 +71,7 @@ npm run lint   # ESLint
 npm run build  # Vercel production build
 ```
 
-The runtime tests cover valid take, invalid reveal from OFF, changing selections, invalid lock, protected post-lock selection, both reveal branches, reset, and non-corruption after rejected actions.
+The tests cover runtime legality, guarded branches, emitted events, controller isolation, v1 migration, data-contract validation, and standalone export behavior.
 
 ## Deploy to Vercel
 
