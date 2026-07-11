@@ -20,6 +20,9 @@ The reference project is an original, broadcast-inspired quiz graphic. It implem
 - Transition edits are staged, summarized, type-aware, and checked for impossible or duplicate routes before save.
 - Permitted runtime data can be prepared before Take without turning data changes into state transitions.
 - Standalone HTML export includes renderer contracts for both reference graphics.
+- Flow JSON v2 gives guarded branches explicit priority, supports bounded AND/OR conditions, and migrates version 1 projects on load.
+- Design and Simulate modes share one runtime; simulation explains branch decisions and supports stepping back.
+- Legal-event descriptors carry typed payload and presentation metadata for generic or specialized controls.
 - Desktop is a working creative-tool layout. Phone layouts intentionally switch between Preview, Flow, Controls, and Inspect modes.
 
 ## Behavioral model
@@ -32,7 +35,7 @@ The reusable model is in [`src/flow`](src/flow):
 | Event | An operator action or external trigger, such as `REVEAL`. |
 | Transition | A legal route from a source state to a destination state for an event. |
 | Variable | Changing data, such as `selectedAnswer`, kept separate from state. |
-| Condition | An optional guard evaluated before a transition runs. |
+| Condition group | A bounded set of typed predicates combined with AND or OR. |
 | Action | A generic effect: set a variable, play a named animation, or emit an event. |
 
 The engine is deliberately React-free. The UI projects it into React Flow, the preview consumes the resulting runtime state, and a future compiler can consume the same JSON. The engine does not contain quiz-specific commands such as `selectQuizAnswer`.
@@ -75,11 +78,11 @@ Import this repository into Vercel, select the default Next.js preset, and deplo
 ## Deliberate limitations
 
 - The quiz preview is a reference renderer, not a general design editor.
-- Conditions currently cover simple variable comparisons and set/not-set checks.
+- Conditions deliberately stop at one AND/OR group and do not allow arbitrary scripts or nested expressions.
 - Actions are typed but only preview-facing animation and variable actions are demonstrated.
 - Connection creation and basic state/variable editing are intentionally lightweight. Rich transition/action authoring needs further UX research before expanding it.
 - The standalone HTML player proves portable Flow JSON execution and reference rendering, but is not a playout-system compatibility claim.
 
 ## Direction
 
-Future iterations should validate this model against lower thirds, scoreboards, timers, data updates, and multi-layer graphics before integration into NoaCG Studio. Likely additions include richer conditions, external data and timer events, animation-completion events, reusable behavior patterns, and a platform-neutral Flow JSON-to-HTML runtime compiler.
+One Flow remains one independently operated graphic. Future package control will compose isolated Flow instances through their controller contracts rather than combining every graphic into one state machine.

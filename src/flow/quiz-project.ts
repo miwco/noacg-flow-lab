@@ -1,6 +1,6 @@
-import type { FlowProject } from "./schema";
+import { migrateProject } from "./migration";
 
-export const quizProject: FlowProject = {
+export const quizProject = migrateProject({
   version: 1,
   id: "noacg-quiz-reference",
   name: "Quiz question",
@@ -32,8 +32,13 @@ export const quizProject: FlowProject = {
     { id: "change-selection", from: "selected", to: "selected", event: "SELECT_ANSWER", label: "Change selection", actions: [{ type: "set-variable", variable: "selectedAnswer", value: { eventValue: true } }, { type: "play-animation", animation: "answer-change" }] },
     { id: "lock", from: "selected", to: "locked", event: "LOCK", label: "Lock selected answer", condition: { left: { variable: "selectedAnswer" }, operator: "is-set" }, actions: [{ type: "play-animation", animation: "answer-lock" }] },
     { id: "reveal-correct", from: "locked", to: "result", event: "REVEAL", label: "Reveal correct", condition: { left: { variable: "selectedAnswer" }, operator: "equals", right: { variable: "correctAnswer" } }, actions: [{ type: "play-animation", animation: "correct-reveal" }] },
-    { id: "reveal-wrong", from: "locked", to: "result", event: "REVEAL", label: "Reveal wrong", condition: { left: { variable: "selectedAnswer" }, operator: "not-equals", right: { variable: "correctAnswer" } }, actions: [{ type: "play-animation", animation: "wrong-reveal" }] },
+    { id: "reveal-wrong", from: "locked", to: "result", event: "REVEAL", label: "Reveal wrong", actions: [{ type: "play-animation", animation: "wrong-reveal" }] },
     { id: "take-out", from: "*", to: "off", event: "TAKE_OUT", label: "Take out", actions: [{ type: "play-animation", animation: "graphic-out" }, { type: "set-variable", variable: "selectedAnswer", value: null }] },
     { id: "reset", from: "*", to: "off", event: "RESET", label: "Reset", actions: [{ type: "set-variable", variable: "selectedAnswer", value: null }] },
   ],
-};
+});
+
+quizProject.events.find((event) => event.id === "SELECT_ANSWER")!.payload![0].options = ["A", "B", "C", "D"];
+quizProject.events.find((event) => event.id === "TAKE")!.presentation = { intent: "primary", order: 1 };
+quizProject.events.find((event) => event.id === "REVEAL")!.presentation = { intent: "primary", order: 4 };
+quizProject.events.find((event) => event.id === "RESET")!.presentation = { intent: "quiet", order: 9 };

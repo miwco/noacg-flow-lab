@@ -1,6 +1,6 @@
-import type { FlowProject } from "./schema";
+import { migrateProject } from "./migration";
 
-export const lowerThirdProject: FlowProject = {
+export const lowerThirdProject = migrateProject({
   version: 1,
   id: "noacg-lower-third-reference",
   name: "Interview lower third",
@@ -28,4 +28,7 @@ export const lowerThirdProject: FlowProject = {
     { id: "take-out", from: "*", to: "off", event: "TAKE_OUT", label: "Take out", actions: [{ type: "play-animation", animation: "lower-third-out" }] },
     { id: "reset", from: "*", to: "off", event: "RESET", label: "Reset", actions: [] },
   ],
-};
+});
+
+lowerThirdProject.events.find((event) => event.id === "TAKE")!.presentation = { intent: "primary", order: 1 };
+lowerThirdProject.events.find((event) => event.id === "RESET")!.presentation = { intent: "quiet", order: 9 };

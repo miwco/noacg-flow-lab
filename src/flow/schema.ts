@@ -1,12 +1,20 @@
 export type FlowValue = string | number | boolean | null;
+export type FlowValueType = "string" | "number" | "boolean";
 
-export type FlowVariable = {
+export type FlowField = {
   id: string;
   label: string;
-  type: "string" | "number" | "boolean";
+  type: FlowValueType;
+  required?: boolean;
+  options?: FlowValue[];
+  minimum?: number;
+  maximum?: number;
+  step?: number;
+};
+
+export type FlowVariable = FlowField & {
   defaultValue: FlowValue;
   operatorEditable?: boolean;
-  options?: FlowValue[];
 };
 
 export type FlowState = {
@@ -20,34 +28,41 @@ export type FlowEvent = {
   id: string;
   label: string;
   description?: string;
-  valueType?: "string" | "number" | "boolean";
+  source?: "operator" | "external" | "animation-complete";
+  payload?: FlowField[];
+  animation?: string;
+  presentation?: { intent?: "primary" | "normal" | "quiet" | "destructive"; group?: string; order?: number };
 };
 
-export type ValueReference = FlowValue | { variable: string } | { eventValue: true };
+export type ValueReference = FlowValue | { variable: string } | { eventField: string };
 
-export type FlowCondition = {
-  left: { variable: string };
-  operator: "equals" | "not-equals" | "is-set" | "is-not-set";
+export type FlowPredicate = {
+  left: ValueReference;
+  operator: "equals" | "not-equals" | "is-set" | "is-not-set" | "greater-than" | "greater-than-or-equal" | "less-than" | "less-than-or-equal";
   right?: ValueReference;
 };
+
+export type FlowConditionGroup = { mode: "all" | "any"; predicates: FlowPredicate[] };
+export type FlowCondition = FlowConditionGroup;
 
 export type FlowAction =
   | { type: "set-variable"; variable: string; value: ValueReference }
   | { type: "play-animation"; animation: string }
-  | { type: "emit"; event: string };
+  | { type: "emit"; event: string; data?: Record<string, ValueReference> };
 
 export type FlowTransition = {
   id: string;
   from: string | "*";
   to: string;
   event: string;
+  priority: number;
   label?: string;
-  condition?: FlowCondition;
+  condition?: FlowConditionGroup;
   actions: FlowAction[];
 };
 
 export type FlowProject = {
-  version: 1;
+  version: 2;
   id: string;
   name: string;
   description: string;
@@ -59,4 +74,6 @@ export type FlowProject = {
   metadata?: { reference?: "quiz" | "lower-third"; renderer?: "quiz" | "lower-third" };
 };
 
-export type FlowEventPayload = { id: string; value?: FlowValue };
+export type FlowEventPayload = { id: string; data?: Record<string, FlowValue> };
+
+export type AvailableEvent = FlowEvent & { source: "operator" | "external" | "animation-complete" };

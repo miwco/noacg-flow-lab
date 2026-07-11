@@ -13,3 +13,13 @@
 - The `?` button teaches both the operator sequence and authoring sequence. Extend it when adding common concepts instead of burying beginner guidance in documentation.
 - The Remotion tutorial composition lives in `src/remotion`; keep it aligned with the real product and render it with `npm run video:render` after material workflow changes.
 - Run `npm test`, `npm run lint`, and `npm run build` after behavior changes. Run `npx remotion versions --log=verbose` after changing video dependencies.
+- One Flow project represents one independently operated graphic. A future broadcast package composes Flow instances without combining their state spaces.
+- Package controllers may dispatch events and set permitted data only through the public Flow runtime contract. They must not mutate runtime internals.
+- Legal-event descriptors are the single source of truth for generic and specialized operator controls.
+- Transition selection must be deterministic and visible to authors. Never rely on hidden array order.
+- Keep conditions typed, declarative, and bounded. Do not add arbitrary JavaScript or a general expression language.
+- Design and simulation must use the same validation and runtime logic.
+- Preserve imported and locally saved projects through explicit Flow JSON migrations.
+- Generic controls are the fallback. Graphic-specific controls may improve presentation but must not redefine legality.
+- Animation-completion events are contracts with the renderer or timeline layer, not timing implemented in Flow.
+- Do not add package regions or coordination UI until Flow instances expose stable event, data, snapshot, and subscription contracts.
