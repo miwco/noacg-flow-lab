@@ -8,7 +8,7 @@ const scenes = [
   { eyebrow: "4  SIMULATE", title: "See exactly why a path fired.", copy: "Inspect every guard, step back, and save repeatable scenarios.", accent: "#ff9aa5", nodes: ["Event", "Trace", "Replay"] },
   { eyebrow: "5  DATA CONTRACT", title: "Author controls from typed data.", copy: "Define payloads, options, ranges, and operator-editable variables visually.", accent: "#79d3ff", nodes: ["Fields", "Options", "Preview"] },
   { eyebrow: "6  EXPORT", title: "Take the same Flow runtime with you.", copy: "Export normalized v2 JSON or a self-contained HTML player.", accent: "#74e2c0", nodes: ["Flow v2", "Standalone HTML"] },
-  { eyebrow: "7  FUTURE PACKAGES", title: "Compose graphics, not state explosions.", copy: "Independent Flow controllers can share one future broadcast control room.", accent: "#8ab1ff", nodes: ["Quiz", "Lower third", "Score bug"] },
+  { eyebrow: "7  CONTROL ROOM", title: "Compose graphics, not state explosions.", copy: "Operate isolated quiz and lower-third controllers from one monitored desk.", accent: "#8ab1ff", nodes: ["Quiz", "Monitor", "Lower third"] },
 ];
 
 function Scene({ scene }: { scene: (typeof scenes)[number] }) {

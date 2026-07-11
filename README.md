@@ -25,6 +25,7 @@ The reference project is an original, broadcast-inspired quiz graphic. It implem
 - Legal-event descriptors carry typed payload and presentation metadata for generic or specialized controls.
 - Event and variable contracts are authored visually with types, options, required fields, ranges, and generated-control previews.
 - Simulation runs can be saved locally as scenarios, replayed from a clean runtime, and inspected through a selectable event timeline.
+- A separate Control Room proof composes quiz and lower-third instances with isolated state, shared monitoring, specialized controls, and generic fallbacks.
 - Desktop is a working creative-tool layout. Phone layouts intentionally switch between Preview, Flow, Controls, and Inspect modes.
 
 ## Behavioral model
@@ -87,4 +88,4 @@ Import this repository into Vercel, select the default Next.js preset, and deplo
 
 ## Direction
 
-One Flow remains one independently operated graphic. Future package control will compose isolated Flow instances through their controller contracts rather than combining every graphic into one state machine.
+One Flow remains one independently operated graphic. The Control Room proof composes isolated Flow instances through their controller contracts rather than combining every graphic into one state machine. Regions and cross-graphic automation remain deliberately deferred.

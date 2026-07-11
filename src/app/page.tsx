@@ -1,3 +1,3 @@
-import FlowLab from "@/components/flow-lab";
+import Workspace from "@/components/workspace";
 
-export default function Home() { return <FlowLab />; }
+export default function Home() { return <Workspace />; }

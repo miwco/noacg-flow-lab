@@ -44,7 +44,7 @@ The transition strip remains as a reliable fallback because global and parallel 
 5. Align standalone export with the same v2 runtime semantics.
 6. Prepare package composition contracts without building package control UI yet.
 
-The typed event/variable authoring and saved-scenario stabilization iteration is complete. The next package-oriented experiment may compose two independent controllers, but must continue using their legal-event descriptors and isolated state.
+The typed event/variable authoring, saved scenarios, and two-instance Control Room proof are complete. The next package step should define explicit coexistence regions and policies only after evaluating this isolated-controller workflow in practice.
 
 The next highest-value iteration is **make the authoring loop safer and more expressive without adding breadth**:
 

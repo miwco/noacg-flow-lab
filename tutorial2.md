@@ -17,6 +17,7 @@ https://miwco.github.io/noacg-flow-lab/
 - Standalone quiz and lower-third renderers using v2 semantics.
 - Visual event and variable contract editors with generated-control previews.
 - Locally saved simulation scenarios with clean replay and selectable history.
+- A separate two-instance Control Room proof for the quiz and lower third.
 
 ## Step-by-step workflow
 
@@ -33,10 +34,11 @@ https://miwco.github.io/noacg-flow-lab/
 11. Save the current run as a scenario. Replaying it always starts with a clean runtime and preserves the original typed payloads.
 12. Export normalized v2 JSON or a standalone HTML player. Invalid projects cannot be exported or simulated.
 13. Load **Lower third** to confirm the same runtime contract supports a different graphic and control panel.
+14. Open **Control room**. Take the quiz and lower third independently and confirm the shared monitor follows both without combining their states.
 
 ## Future package direction
 
-Each Flow controls one independent graphic. A future whole-broadcast control room will compose multiple Flow controllers and their legal-event descriptors without creating combined states such as `QUIZ_ON_LOWER_THIRD_OFF`.
+Each Flow controls one independent graphic. The current Control Room proves that multiple controllers and their legal-event descriptors can share one desk without creating combined states such as `QUIZ_ON_LOWER_THIRD_OFF`. Regions and cross-graphic policies are not part of this proof.
 
 ## Video tutorial
 
