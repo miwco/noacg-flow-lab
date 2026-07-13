@@ -1,31 +1,109 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Background, Controls, Handle, MarkerType, MiniMap, Position, ReactFlow, type Connection, type Edge, type Node, type NodeProps, type OnNodesChange, type ReactFlowInstance } from "@xyflow/react";
+import {
+  Background,
+  Controls,
+  Handle,
+  MarkerType,
+  MiniMap,
+  Position,
+  ReactFlow,
+  type Connection,
+  type Edge,
+  type Node,
+  type NodeProps,
+  type OnNodesChange,
+  type ReactFlowInstance,
+} from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { AlertCircle, Check, CircleDot, CircleHelp, CodeXml, Download, FileUp, Link2, Plus, RotateCcw, Sparkles } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  CircleDot,
+  CircleHelp,
+  CodeXml,
+  Download,
+  FileUp,
+  Link2,
+  Plus,
+  RotateCcw,
+  Sparkles,
+} from "lucide-react";
 import { compileStandaloneHtml } from "@/flow/html-export";
+import { blankProject } from "@/flow/blank-project";
 import { lowerThirdProject } from "@/flow/lower-third-project";
 import { migrateProject } from "@/flow/migration";
 import { quizProject } from "@/flow/quiz-project";
-import { availableEvents, createRuntime, dispatchEvent, updateRuntimeVariable, type RuntimeState, type TransitionTrace } from "@/flow/runtime";
-import type { AvailableEvent, FlowAction, FlowConditionGroup, FlowEventPayload, FlowField, FlowPredicate, FlowProject, FlowTransition, FlowValue, FlowVariable, ValueReference } from "@/flow/schema";
+import {
+  availableEvents,
+  createRuntime,
+  dispatchEvent,
+  updateRuntimeVariable,
+  type RuntimeState,
+  type TransitionTrace,
+} from "@/flow/runtime";
+import type {
+  AvailableEvent,
+  FlowAction,
+  FlowConditionGroup,
+  FlowEventPayload,
+  FlowField,
+  FlowPredicate,
+  FlowProject,
+  FlowTransition,
+  FlowValue,
+  FlowVariable,
+  ValueReference,
+} from "@/flow/schema";
 import { validateProject } from "@/flow/validation";
+import {
+  GenericPreview,
+  LowerThirdPreview,
+  QuizPreview,
+} from "./graphic-preview";
 
-type Selection = { kind: "state" | "transition" | "event" | "variable"; id: string } | null;
+type Selection = {
+  kind: "state" | "transition" | "event" | "variable";
+  id: string;
+} | null;
 type Tab = "preview" | "flow" | "controls" | "inspect";
 type WorkspaceMode = "design" | "simulate";
-type StateData = { label: string; active: boolean; selected: boolean; description?: string };
-type HistoryItem = { before: RuntimeState; event: FlowEventPayload; trace: TransitionTrace[] };
+type StateData = {
+  label: string;
+  active: boolean;
+  selected: boolean;
+  description?: string;
+};
+type HistoryItem = {
+  before: RuntimeState;
+  event: FlowEventPayload;
+  trace: TransitionTrace[];
+};
 type FlowScenario = { id: string; name: string; events: FlowEventPayload[] };
 
 function StateNode({ data }: NodeProps<Node<StateData>>) {
-  return <div className={`state-node ${data.active ? "active" : ""} ${data.selected ? "selected" : ""}`}><Handle type="target" position={Position.Left} /><i /><strong>{data.label}</strong><span>{data.active ? "LIVE STATE" : data.description || "Flow state"}</span><Handle type="source" position={Position.Right} /></div>;
+  return (
+    <div
+      className={`state-node ${data.active ? "active" : ""} ${data.selected ? "selected" : ""}`}
+    >
+      <Handle type="target" position={Position.Left} />
+      <i />
+      <strong>{data.label}</strong>
+      <span>
+        {data.active ? "LIVE STATE" : data.description || "Flow state"}
+      </span>
+      <Handle type="source" position={Position.Right} />
+    </div>
+  );
 }
 const nodeTypes = { state: StateNode };
 
 function referenceText(reference: ValueReference | undefined) {
-  if (reference && typeof reference === "object") return "variable" in reference ? reference.variable : `event.${reference.eventField}`;
+  if (reference && typeof reference === "object")
+    return "variable" in reference
+      ? reference.variable
+      : `event.${reference.eventField}`;
   return JSON.stringify(reference);
 }
 function predicateText(predicate: FlowPredicate) {
@@ -36,155 +114,2375 @@ function predicateText(predicate: FlowPredicate) {
 }
 function conditionText(condition?: FlowConditionGroup) {
   if (!condition) return "Always available";
-  return condition.predicates.map(predicateText).join(condition.mode === "all" ? " AND " : " OR ");
+  return condition.predicates
+    .map(predicateText)
+    .join(condition.mode === "all" ? " AND " : " OR ");
 }
 function actionText(action: FlowAction) {
   if (action.type === "play-animation") return `Play "${action.animation}"`;
-  if (action.type === "set-variable") return `Set ${action.variable} to ${referenceText(action.value)}`;
+  if (action.type === "set-variable")
+    return `Set ${action.variable} to ${referenceText(action.value)}`;
   return `Emit ${action.event}`;
 }
 function saveFile(name: string, content: string, type = "application/json") {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([content], { type }));
-  link.download = name; link.click(); URL.revokeObjectURL(link.href);
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
-export default function FlowLab({ onOpenControlRoom }: { onOpenControlRoom?: () => void }) {
+export default function FlowLab({
+  onOpenControlRoom,
+}: {
+  onOpenControlRoom?: () => void;
+}) {
   const [project, setProject] = useState<FlowProject>(quizProject);
   const [runtime, setRuntime] = useState(() => createRuntime(quizProject));
-  const [selection, setSelection] = useState<Selection>({ kind: "state", id: "off" });
+  const [selection, setSelection] = useState<Selection>({
+    kind: "state",
+    id: "off",
+  });
   const [tab, setTab] = useState<Tab>("preview");
   const [mode, setMode] = useState<WorkspaceMode>("design");
-  const [guidedMode, setGuidedMode] = useState(false);
+  const [guidedMode, setGuidedMode] = useState(true);
   const [notice, setNotice] = useState("Ready for air.");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<number | null>(null);
   const [scenarios, setScenarios] = useState<FlowScenario[]>([]);
   const importRef = useRef<HTMLInputElement>(null);
   const storageReady = useRef(false);
-  const graphInstance = useRef<ReactFlowInstance<Node<StateData>, Edge> | null>(null);
+  const graphInstance = useRef<ReactFlowInstance<Node<StateData>, Edge> | null>(
+    null,
+  );
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       try {
         const saved = localStorage.getItem("noacg-flow-lab-project");
-        if (saved) loadProject(migrateProject(JSON.parse(saved)), "Saved Flow restored.");
-      } catch { localStorage.removeItem("noacg-flow-lab-project"); }
+        if (saved)
+          loadProject(
+            migrateProject(JSON.parse(saved)),
+            "Saved Flow restored.",
+          );
+      } catch {
+        localStorage.removeItem("noacg-flow-lab-project");
+      }
       storageReady.current = true;
     }, 0);
     return () => window.clearTimeout(timeout);
   }, []);
-  useEffect(() => { if (storageReady.current) localStorage.setItem("noacg-flow-lab-project", JSON.stringify(project)); }, [project]);
-  useEffect(() => { if (storageReady.current) localStorage.setItem(`noacg-flow-scenarios:${project.id}`, JSON.stringify(scenarios)); }, [project.id, scenarios]);
+  useEffect(() => {
+    if (storageReady.current)
+      localStorage.setItem("noacg-flow-lab-project", JSON.stringify(project));
+  }, [project]);
+  useEffect(() => {
+    if (storageReady.current)
+      localStorage.setItem(
+        `noacg-flow-scenarios:${project.id}`,
+        JSON.stringify(scenarios),
+      );
+  }, [project.id, scenarios]);
 
   const diagnostics = useMemo(() => validateProject(project), [project]);
   const hasErrors = diagnostics.some((item) => item.level === "error");
-  const allowed = useMemo(() => availableEvents(project, runtime), [project, runtime]);
-  const state = selection?.kind === "state" ? project.states.find((item) => item.id === selection.id) : undefined;
-  const transition = selection?.kind === "transition" ? project.transitions.find((item) => item.id === selection.id) : undefined;
-  const selectedEvent = selection?.kind === "event" ? project.events.find((item) => item.id === selection.id) : undefined;
-  const selectedVariable = selection?.kind === "variable" ? project.variables.find((item) => item.id === selection.id) : undefined;
-  const stateName = project.states.find((item) => item.id === runtime.stateId)?.label || runtime.stateId;
-  const selectedHistoryItem = selectedHistory === null ? history.at(-1) : history[selectedHistory];
+  const allowed = useMemo(
+    () => availableEvents(project, runtime),
+    [project, runtime],
+  );
+  const state =
+    selection?.kind === "state"
+      ? project.states.find((item) => item.id === selection.id)
+      : undefined;
+  const transition =
+    selection?.kind === "transition"
+      ? project.transitions.find((item) => item.id === selection.id)
+      : undefined;
+  const selectedEvent =
+    selection?.kind === "event"
+      ? project.events.find((item) => item.id === selection.id)
+      : undefined;
+  const selectedVariable =
+    selection?.kind === "variable"
+      ? project.variables.find((item) => item.id === selection.id)
+      : undefined;
+  const stateName =
+    project.states.find((item) => item.id === runtime.stateId)?.label ||
+    runtime.stateId;
+  const selectedHistoryItem =
+    selectedHistory === null ? history.at(-1) : history[selectedHistory];
   const lastTrace = selectedHistoryItem?.trace.at(-1);
 
   function loadProject(next: FlowProject, message: string) {
     let savedScenarios: FlowScenario[] = [];
-    try { savedScenarios = JSON.parse(localStorage.getItem(`noacg-flow-scenarios:${next.id}`) || "[]"); } catch { savedScenarios = []; }
-    setProject(next); setRuntime(createRuntime(next)); setSelection({ kind: "state", id: next.initialStateId }); setHistory([]); setSelectedHistory(null); setScenarios(savedScenarios); setMode("design"); setNotice(message);
-    window.setTimeout(() => graphInstance.current?.fitView({ padding: 0.12 }), 0);
+    try {
+      savedScenarios = JSON.parse(
+        localStorage.getItem(`noacg-flow-scenarios:${next.id}`) || "[]",
+      );
+    } catch {
+      savedScenarios = [];
+    }
+    setProject(next);
+    setRuntime(createRuntime(next));
+    setSelection({ kind: "state", id: next.initialStateId });
+    setHistory([]);
+    setSelectedHistory(null);
+    setScenarios(savedScenarios);
+    setMode("design");
+    setNotice(message);
+    window.setTimeout(
+      () => graphInstance.current?.fitView({ padding: 0.12 }),
+      0,
+    );
   }
-  const dispatch = useCallback((event: FlowEventPayload) => {
-    const before = runtime;
-    const result = dispatchEvent(project, runtime, event);
-    setRuntime(result.runtime);
-    setHistory((items) => [...items, { before, event, trace: result.trace }].slice(-100)); setSelectedHistory(null);
-    if (result.ok) { setSelection({ kind: "transition", id: result.transitionId }); setNotice(`Ran ${project.transitions.find((item) => item.id === result.transitionId)?.label || event.id}.`); }
-    else setNotice(result.reason);
-  }, [project, runtime]);
+  const dispatch = useCallback(
+    (event: FlowEventPayload) => {
+      const before = runtime;
+      const result = dispatchEvent(project, runtime, event);
+      setRuntime(result.runtime);
+      setHistory((items) =>
+        [...items, { before, event, trace: result.trace }].slice(-100),
+      );
+      setSelectedHistory(null);
+      if (result.ok) {
+        setSelection({ kind: "transition", id: result.transitionId });
+        setNotice(
+          `Ran ${project.transitions.find((item) => item.id === result.transitionId)?.label || event.id}.`,
+        );
+      } else setNotice(result.reason);
+    },
+    [project, runtime],
+  );
 
-  const nodes = useMemo<Node<StateData>[]>(() => project.states.map((item) => ({ id: item.id, type: "state", position: item.position, width: 147, height: 76, data: { label: item.label, description: item.description, active: runtime.stateId === item.id, selected: selection?.kind === "state" && selection.id === item.id } })), [project.states, runtime.stateId, selection]);
-  const edges = useMemo<Edge[]>(() => project.transitions.filter((item) => item.from !== "*").map((item) => ({ id: item.id, source: item.from, target: item.to, label: `${item.priority}: ${item.label ?? item.event}`, animated: runtime.lastTransitionId === item.id, markerEnd: { type: MarkerType.ArrowClosed }, className: `${selection?.kind === "transition" && selection.id === item.id ? "flow-edge-selected" : ""} ${runtime.lastTransitionId === item.id ? "flow-edge-fired" : ""}`, labelStyle: { fill: "#c3d1ff", fontSize: 10, fontWeight: 700 }, labelBgStyle: { fill: "#10172b", fillOpacity: .94 } })), [project.transitions, runtime.lastTransitionId, selection]);
-  const onNodesChange: OnNodesChange = useCallback((changes) => { if (mode === "simulate") return; setProject((current) => ({ ...current, states: current.states.map((item) => { const change = changes.find((entry) => entry.type === "position" && entry.id === item.id && entry.position); return change?.type === "position" && change.position ? { ...item, position: change.position } : item; }) })); }, [mode]);
-  const onConnect = useCallback((connection: Connection) => { if (mode === "simulate" || !connection.source || !connection.target) return; const event = prompt("Event name, for example CONTINUE")?.trim(); if (!event) return; setProject((current) => ({ ...current, events: current.events.some((item) => item.id === event) ? current.events : [...current.events, { id: event, label: event, source: "operator" }], transitions: [...current.transitions, { id: `transition-${crypto.randomUUID()}`, from: connection.source!, to: connection.target!, event, priority: 0, label: event, actions: [] }] })); }, [mode]);
+  const nodes = useMemo<Node<StateData>[]>(
+    () =>
+      project.states.map((item) => ({
+        id: item.id,
+        type: "state",
+        position: item.position,
+        width: 147,
+        height: 76,
+        data: {
+          label: item.label,
+          description: item.description,
+          active: runtime.stateId === item.id,
+          selected: selection?.kind === "state" && selection.id === item.id,
+        },
+      })),
+    [project.states, runtime.stateId, selection],
+  );
+  const edges = useMemo<Edge[]>(
+    () =>
+      project.transitions
+        .filter((item) => item.from !== "*")
+        .map((item) => ({
+          id: item.id,
+          source: item.from,
+          target: item.to,
+          label: `${item.priority}: ${item.label ?? item.event}`,
+          animated: runtime.lastTransitionId === item.id,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          className: `${selection?.kind === "transition" && selection.id === item.id ? "flow-edge-selected" : ""} ${runtime.lastTransitionId === item.id ? "flow-edge-fired" : ""}`,
+          labelStyle: { fill: "#c3d1ff", fontSize: 10, fontWeight: 700 },
+          labelBgStyle: { fill: "#10172b", fillOpacity: 0.94 },
+        })),
+    [project.transitions, runtime.lastTransitionId, selection],
+  );
+  const onNodesChange: OnNodesChange = useCallback(
+    (changes) => {
+      if (mode === "simulate") return;
+      setProject((current) => ({
+        ...current,
+        states: current.states.map((item) => {
+          const change = changes.find(
+            (entry) =>
+              entry.type === "position" &&
+              entry.id === item.id &&
+              entry.position,
+          );
+          return change?.type === "position" && change.position
+            ? { ...item, position: change.position }
+            : item;
+        }),
+      }));
+    },
+    [mode],
+  );
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      if (mode === "simulate" || !connection.source || !connection.target)
+        return;
+      const transitionId = `transition-${crypto.randomUUID()}`;
+      setProject((current) => {
+        const event =
+          current.events.find((item) => item.source !== "animation-complete") ??
+          current.events[0];
+        const eventId = event?.id ?? "TAKE";
+        const priorities = current.transitions
+          .filter(
+            (item) => item.from === connection.source && item.event === eventId,
+          )
+          .map((item) => item.priority);
+        return {
+          ...current,
+          events: event
+            ? current.events
+            : [
+                ...current.events,
+                { id: eventId, label: "Take", source: "operator" },
+              ],
+          transitions: [
+            ...current.transitions,
+            {
+              id: transitionId,
+              from: connection.source!,
+              to: connection.target!,
+              event: eventId,
+              priority: priorities.length ? Math.max(...priorities) + 10 : 0,
+              label: "New transition",
+              actions: [],
+            },
+          ],
+        };
+      });
+      setSelection({ kind: "transition", id: transitionId });
+      setNotice(
+        "Connection created. Choose its event, conditions, and actions in the Inspector.",
+      );
+    },
+    [mode],
+  );
 
   function enterMode(next: WorkspaceMode) {
-    if (next === "simulate" && hasErrors) { setNotice("Fix Flow health errors before simulation."); return; }
-    setMode(next); setRuntime(createRuntime(project)); setHistory([]); setSelectedHistory(null); setNotice(next === "simulate" ? "Simulation started." : "Design mode ready.");
+    if (next === "simulate" && hasErrors) {
+      setNotice("Fix Flow health errors before simulation.");
+      return;
+    }
+    setMode(next);
+    setRuntime(createRuntime(project));
+    setHistory([]);
+    setSelectedHistory(null);
+    setNotice(
+      next === "simulate" ? "Simulation started." : "Design mode ready.",
+    );
   }
-  function stepBack() { const item = history.at(-1); if (!item) return; setRuntime(item.before); setHistory((items) => items.slice(0, -1)); setSelectedHistory(null); setNotice("Stepped back one event."); }
-  function saveScenario() { if (!history.length) { setNotice("Run at least one event before saving a scenario."); return; } const name = prompt("Scenario name", `Scenario ${scenarios.length + 1}`)?.trim(); if (!name) return; setScenarios((items) => [...items, { id: crypto.randomUUID(), name, events: history.map((item) => item.event) }]); setNotice(`Saved scenario ${name}.`); }
-  function replayScenario(scenario: FlowScenario) { let next = createRuntime(project); const replayed: HistoryItem[] = []; for (const event of scenario.events) { const before = next; const result = dispatchEvent(project, next, event); replayed.push({ before, event, trace: result.trace }); next = result.runtime; if (!result.ok) break; } setMode("simulate"); setRuntime(next); setHistory(replayed); setSelectedHistory(null); setNotice(`Replayed ${scenario.name}.`); }
+  function stepBack() {
+    const item = history.at(-1);
+    if (!item) return;
+    setRuntime(item.before);
+    setHistory((items) => items.slice(0, -1));
+    setSelectedHistory(null);
+    setNotice("Stepped back one event.");
+  }
+  function saveScenario() {
+    if (!history.length) {
+      setNotice("Run at least one event before saving a scenario.");
+      return;
+    }
+    const name = prompt(
+      "Scenario name",
+      `Scenario ${scenarios.length + 1}`,
+    )?.trim();
+    if (!name) return;
+    setScenarios((items) => [
+      ...items,
+      {
+        id: crypto.randomUUID(),
+        name,
+        events: history.map((item) => item.event),
+      },
+    ]);
+    setNotice(`Saved scenario ${name}.`);
+  }
+  function replayScenario(scenario: FlowScenario) {
+    let next = createRuntime(project);
+    const replayed: HistoryItem[] = [];
+    for (const event of scenario.events) {
+      const before = next;
+      const result = dispatchEvent(project, next, event);
+      replayed.push({ before, event, trace: result.trace });
+      next = result.runtime;
+      if (!result.ok) break;
+    }
+    setMode("simulate");
+    setRuntime(next);
+    setHistory(replayed);
+    setSelectedHistory(null);
+    setNotice(`Replayed ${scenario.name}.`);
+  }
 
-  function importProject(file: File) { const reader = new FileReader(); reader.onload = () => { try { loadProject(migrateProject(JSON.parse(String(reader.result))), "Flow project imported and normalized to v2."); } catch { setNotice("That file is not a supported Flow project."); } }; reader.readAsText(file); }
-  function addState() { const label = prompt("State name", "NEW STATE")?.trim(); if (!label) return; const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "-") || `state-${Date.now()}`; setProject((current) => ({ ...current, states: [...current.states, { id, label: label.toUpperCase(), description: "A new stable graphic state.", position: { x: 340, y: 430 } }] })); setSelection({ kind: "state", id }); }
-  function addVariable() { const id = `variable-${crypto.randomUUID()}`; setProject((current) => ({ ...current, variables: [...current.variables, { id, label: "New variable", type: "string", defaultValue: "" }] })); setSelection({ kind: "variable", id }); }
-  function addEvent() { const id = `EVENT_${project.events.length + 1}`; setProject((current) => ({ ...current, events: [...current.events, { id, label: "New event", source: "operator", payload: [] }] })); setSelection({ kind: "event", id }); }
+  function importProject(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        loadProject(
+          migrateProject(JSON.parse(String(reader.result))),
+          "Flow project imported and normalized to v2.",
+        );
+      } catch {
+        setNotice("That file is not a supported Flow project.");
+      }
+    };
+    reader.readAsText(file);
+  }
+  function addState() {
+    const id = `state-${crypto.randomUUID()}`;
+    setProject((current) => ({
+      ...current,
+      states: [
+        ...current.states,
+        {
+          id,
+          label: "NEW STATE",
+          description: "Describe the stable on-air situation.",
+          position: { x: 340, y: 430 },
+        },
+      ],
+    }));
+    setSelection({ kind: "state", id });
+    setNotice(
+      "State created. Name and describe it in the Inspector, then drag from a handle to connect it.",
+    );
+  }
+  function addVariable() {
+    const id = `variable-${crypto.randomUUID()}`;
+    setProject((current) => ({
+      ...current,
+      variables: [
+        ...current.variables,
+        { id, label: "New variable", type: "string", defaultValue: "" },
+      ],
+    }));
+    setSelection({ kind: "variable", id });
+  }
+  function addEvent() {
+    const id = `EVENT_${project.events.length + 1}`;
+    setProject((current) => ({
+      ...current,
+      events: [
+        ...current.events,
+        { id, label: "New event", source: "operator", payload: [] },
+      ],
+    }));
+    setSelection({ kind: "event", id });
+  }
 
-  return <main className={`lab-shell ${guidedMode ? "guided-mode" : ""}`}>
-    <header className="topbar"><div className="brand"><b><CircleDot size={20} /></b><div><strong>NoaCG <i>Flow Lab</i></strong><small>Visual behavior for live HTML graphics</small></div></div><div className="topbar-actions"><span><Check size={14} /> Flow JSON v2</span>{onOpenControlRoom && <button className="open-control-room" onClick={onOpenControlRoom}>Control room</button>}<div className="mode-switch"><button className={mode === "design" ? "active" : ""} onClick={() => enterMode("design")}>Design</button><button className={mode === "simulate" ? "active" : ""} onClick={() => enterMode("simulate")}>Simulate</button></div><button className={`help-button ${guidedMode ? "active" : ""}`} onClick={() => setGuidedMode((value) => !value)} title="Show workflow help"><CircleHelp size={17} /></button><select className="reference-picker" value={project.metadata?.reference ?? "quiz"} onChange={(event) => loadProject(event.target.value === "lower-third" ? lowerThirdProject : quizProject, "Reference loaded.")}><option value="quiz">Quiz reference</option><option value="lower-third">Lower third</option></select><button onClick={() => saveFile("noacg-flow-project.json", JSON.stringify(project, null, 2))} title="Export Flow JSON"><Download size={16} /></button><button disabled={hasErrors} onClick={() => saveFile(`${project.id}.html`, compileStandaloneHtml(project), "text/html")} title="Export standalone HTML"><CodeXml size={16} /></button><button onClick={() => importRef.current?.click()} title="Import Flow JSON"><FileUp size={16} /></button><input ref={importRef} hidden type="file" accept="application/json" onChange={(event) => event.target.files?.[0] && importProject(event.target.files[0])} /></div></header>
-    <nav className="mobile-tabs" aria-label="Workspace">{(["preview", "flow", "controls", "inspect"] as Tab[]).map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item[0].toUpperCase() + item.slice(1)}</button>)}</nav>
-    <section className={`workspace tab-${tab}`}>
-      <div className="left-column"><section className="panel preview-panel"><Title eyebrow="Live preview" title={project.name} right={<span className="state-pill"><i />{stateName}</span>} />{project.metadata?.renderer === "lower-third" ? <LowerThirdPreview runtime={runtime} /> : <QuizPreview runtime={runtime} />}<div className="preview-foot"><span><Sparkles size={14} />{runtime.lastAnimation ? `Animation: ${runtime.lastAnimation}` : "Waiting for transition"}</span><span>16:9 output</span></div></section><section className="panel runtime-panel"><Title eyebrow="Runtime data" title={runtime.stateId === project.initialStateId ? "Ready to edit" : "Live values"} /><div className="variable-list">{project.variables.map((variable) => <div key={variable.id}><span>{variable.label}<small>{variable.id}</small></span>{variable.operatorEditable && runtime.stateId === project.initialStateId ? <RuntimeValueInput variable={variable} value={runtime.variables[variable.id]} onChange={(value) => { const result = updateRuntimeVariable(project, runtime, variable.id, value); setRuntime(result.runtime); if (!result.ok) setNotice(result.reason); }} /> : <strong>{runtime.variables[variable.id] === null ? "-" : String(runtime.variables[variable.id])}</strong>}</div>)}</div></section></div>
-      <section className="panel graph-panel"><Title eyebrow={mode === "simulate" ? "Simulation graph" : "State graph"} title={project.name} right={mode === "design" ? <div className="graph-actions"><button onClick={addState}><Plus size={14} /> State</button><button onClick={() => setNotice("Drag between state handles to connect them.")}><Link2 size={14} /> Connect</button></div> : <div className="graph-actions"><button onClick={stepBack} disabled={!history.length}>Step back</button><button onClick={() => { setRuntime(createRuntime(project)); setHistory([]); }}>Reset</button></div>} />{guidedMode && <div className="author-guide"><span><b>1</b> Design stable states</span><span><b>2</b> Order guarded branches</span><span><b>3</b> Simulate and inspect why</span></div>}<div className="graph-canvas"><ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onConnect={onConnect} onNodeClick={(_, node) => setSelection({ kind: "state", id: node.id })} onEdgeClick={(_, edge) => setSelection({ kind: "transition", id: edge.id })} onInit={(instance) => { graphInstance.current = instance; window.setTimeout(() => instance.fitView({ padding: .12 }), 0); }} fitView minZoom={.4} maxZoom={1.5} proOptions={{ hideAttribution: true }}><Background color="#263558" gap={20} size={1} /><MiniMap nodeColor={(node) => node.id === runtime.stateId ? "#79a6ff" : "#26385d"} maskColor="rgba(8,12,25,.7)" /><Controls showInteractive={false} /></ReactFlow></div><div className="graph-transition-strip"><span>DECISION BRANCHES</span>{[...project.transitions].sort((a, b) => a.from.localeCompare(b.from) || a.event.localeCompare(b.event) || a.priority - b.priority).map((item) => <button key={item.id} className={`${runtime.lastTransitionId === item.id ? "fired" : ""} ${selection?.kind === "transition" && selection.id === item.id ? "selected" : ""}`} onClick={() => setSelection({ kind: "transition", id: item.id })}>{item.priority} · {item.label || item.event}</button>)}</div><div className="graph-note"><span><i className="dot live" /> Active state</span><span><i className="dot fired" /> Last transition</span><span>Mode: {mode}</span></div></section>
-      <div className="right-column"><section className="panel controls-panel"><Title eyebrow="Operator controls" title="Only legal actions" />{guidedMode && <div className="operator-guide"><strong>{mode === "simulate" ? "Test safely" : "Operator sequence"}</strong><span>Prepare data, Take, then use only the actions offered by the runtime.</span></div>}<p>{project.states.find((item) => item.id === runtime.stateId)?.description}</p><EventControls events={allowed} runtime={runtime} dispatch={dispatch} /><div className={`notice ${notice.includes("not ") || notice.includes("Fix") ? "warning" : ""}`}>{notice.includes("not ") || notice.includes("Fix") ? <AlertCircle size={15} /> : <Check size={15} />}{notice}</div>{mode === "simulate" && <ScenarioControls history={history} scenarios={scenarios} onSave={saveScenario} onReplay={replayScenario} onDelete={(id) => setScenarios((items) => items.filter((item) => item.id !== id))} />}</section>
-        <section className="panel inspector-panel"><Title eyebrow="Inspector" title={transition ? "Transition" : state ? "State" : selectedEvent ? "Event contract" : selectedVariable ? "Variable contract" : "Select a graph item"} />{state && <div className="inspector-content"><label>Name<input disabled={mode === "simulate"} value={state.label} onChange={(event) => setProject((current) => ({ ...current, states: current.states.map((item) => item.id === state.id ? { ...item, label: event.target.value } : item) }))} /></label><label>Description<textarea disabled={mode === "simulate"} value={state.description || ""} onChange={(event) => setProject((current) => ({ ...current, states: current.states.map((item) => item.id === state.id ? { ...item, description: event.target.value } : item) }))} /></label><p>A state is a stable on-air situation. Changing values belong in variables.</p></div>}{transition && <div className="inspector-content"><Info label="Event" value={transition.event} /><Info label="Priority" value={String(transition.priority)} /><Info label="From" value={transition.from} /><Info label="To" value={transition.to} /><Info label="Condition" value={conditionText(transition.condition)} /><div className="action-list"><small>ACTIONS</small>{transition.actions.map((action, index) => <div key={index}><b>{index + 1}</b>{actionText(action)}</div>)}</div></div>}{mode === "design" && selectedEvent && <EventContractEditor event={selectedEvent} onChange={(next) => setProject((current) => ({ ...current, events: current.events.map((item) => item.id === selectedEvent.id ? next : item), transitions: current.transitions.map((item) => item.event === selectedEvent.id ? { ...item, event: next.id } : item) }))} />}{mode === "design" && selectedVariable && <VariableContractEditor variable={selectedVariable} onChange={(next) => setProject((current) => ({ ...current, variables: current.variables.map((item) => item.id === selectedVariable.id ? next : item) }))} />}{mode === "simulate" && <SimulationTimeline history={history} selected={selectedHistory} onSelect={setSelectedHistory} />}{mode === "simulate" && lastTrace && <TracePanel trace={lastTrace} project={project} />}</section>
-        {mode === "design" && transition && <TransitionEditor key={transition.id} transition={transition} project={project} onSave={(next) => setProject((current) => ({ ...current, transitions: current.transitions.map((item) => item.id === next.id ? next : item) }))} onDelete={() => { setProject((current) => ({ ...current, transitions: current.transitions.filter((item) => item.id !== transition.id) })); setSelection(null); }} />}
-        {mode === "design" && <DataContractsPanel project={project} selection={selection} onSelect={setSelection} onAddEvent={addEvent} onAddVariable={addVariable} />}
-        <section className="panel validation-panel"><Title eyebrow="Flow health" title={hasErrors ? "Needs attention" : "Looking good"} />{diagnostics.length ? diagnostics.map((item, index) => <div className={`diagnostic ${item.level}`} key={index}><AlertCircle size={14} />{item.message}</div>) : <div className="diagnostic okay"><Check size={14} /> No structural issues found.</div>}{mode === "design" && <button className="text-action" onClick={() => loadProject(quizProject, "Quiz reference restored.")}><RotateCcw size={14} /> Restore quiz reference</button>}</section>
+  return (
+    <main
+      className={`lab-shell mode-${mode} ${guidedMode ? "guided-mode" : ""}`}
+    >
+      <header className="topbar">
+        <div className="brand">
+          <b>
+            <CircleDot size={20} />
+          </b>
+          <div>
+            <strong>
+              NoaCG <i>Flow Lab</i>
+            </strong>
+            <small>Visual behavior for live HTML graphics</small>
+          </div>
+        </div>
+        <div className="topbar-actions">
+          <span>
+            <Check size={14} /> Flow JSON v2
+          </span>
+          {onOpenControlRoom && (
+            <button className="open-control-room" onClick={onOpenControlRoom}>
+              Control room
+            </button>
+          )}
+          <div className="mode-switch">
+            <button
+              className={mode === "design" ? "active" : ""}
+              onClick={() => enterMode("design")}
+            >
+              Design
+            </button>
+            <button
+              className={mode === "simulate" ? "active" : ""}
+              onClick={() => enterMode("simulate")}
+            >
+              Simulate
+            </button>
+          </div>
+          <button
+            className={`help-button ${guidedMode ? "active" : ""}`}
+            onClick={() => setGuidedMode((value) => !value)}
+            title="Show workflow help"
+          >
+            <CircleHelp size={17} />
+          </button>
+          <select
+            className="reference-picker"
+            value={project.metadata?.reference ?? "blank"}
+            onChange={(event) => {
+              const choice = event.target.value;
+              loadProject(
+                choice === "lower-third"
+                  ? lowerThirdProject
+                  : choice === "blank"
+                    ? blankProject
+                    : quizProject,
+                choice === "blank"
+                  ? "Blank Flow created. Add a state, connect it, then configure the transition."
+                  : "Reference loaded.",
+              );
+            }}
+          >
+            <option value="quiz">Quiz reference</option>
+            <option value="lower-third">Lower third</option>
+            <option value="blank">Blank flow</option>
+          </select>
+          <button
+            onClick={() =>
+              saveFile(
+                "noacg-flow-project.json",
+                JSON.stringify(project, null, 2),
+              )
+            }
+            title="Export Flow JSON"
+          >
+            <Download size={16} />
+          </button>
+          <button
+            disabled={hasErrors}
+            onClick={() =>
+              saveFile(
+                `${project.id}.html`,
+                compileStandaloneHtml(project),
+                "text/html",
+              )
+            }
+            title="Export standalone HTML"
+          >
+            <CodeXml size={16} />
+          </button>
+          <button
+            onClick={() => importRef.current?.click()}
+            title="Import Flow JSON"
+          >
+            <FileUp size={16} />
+          </button>
+          <input
+            ref={importRef}
+            hidden
+            type="file"
+            accept="application/json"
+            onChange={(event) =>
+              event.target.files?.[0] && importProject(event.target.files[0])
+            }
+          />
+        </div>
+      </header>
+      <nav className="mobile-tabs" aria-label="Workspace">
+        {(["preview", "flow", "controls", "inspect"] as Tab[]).map((item) => (
+          <button
+            key={item}
+            className={tab === item ? "active" : ""}
+            onClick={() => setTab(item)}
+          >
+            {item[0].toUpperCase() + item.slice(1)}
+          </button>
+        ))}
+      </nav>
+      <section className={`workspace tab-${tab}`}>
+        <div className="left-column">
+          <section className="panel preview-panel">
+            <Title
+              eyebrow="Live preview"
+              title={project.name}
+              right={
+                <span className="state-pill">
+                  <i />
+                  {stateName}
+                </span>
+              }
+            />
+            {project.metadata?.renderer === "lower-third" ? (
+              <LowerThirdPreview runtime={runtime} />
+            ) : project.metadata?.renderer === "quiz" ? (
+              <QuizPreview runtime={runtime} />
+            ) : (
+              <GenericPreview runtime={runtime} />
+            )}
+            <div className="preview-foot">
+              <span>
+                <Sparkles size={14} />
+                {runtime.lastAnimation
+                  ? `Animation: ${runtime.lastAnimation}`
+                  : "Waiting for transition"}
+              </span>
+              <span>16:9 output</span>
+            </div>
+          </section>
+          <section className="panel runtime-panel">
+            <Title
+              eyebrow="Runtime data"
+              title={
+                runtime.stateId === project.initialStateId
+                  ? "Ready to edit"
+                  : "Live values"
+              }
+            />
+            <div className="variable-list">
+              {project.variables.map((variable) => (
+                <div key={variable.id}>
+                  <span>
+                    {variable.label}
+                    <small>{variable.id}</small>
+                  </span>
+                  {variable.operatorEditable &&
+                  runtime.stateId === project.initialStateId ? (
+                    <RuntimeValueInput
+                      variable={variable}
+                      value={runtime.variables[variable.id]}
+                      onChange={(value) => {
+                        const result = updateRuntimeVariable(
+                          project,
+                          runtime,
+                          variable.id,
+                          value,
+                        );
+                        setRuntime(result.runtime);
+                        if (!result.ok) setNotice(result.reason);
+                      }}
+                    />
+                  ) : (
+                    <strong>
+                      {runtime.variables[variable.id] === null
+                        ? "-"
+                        : String(runtime.variables[variable.id])}
+                    </strong>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+        <section className="panel graph-panel">
+          <Title
+            eyebrow={mode === "simulate" ? "Simulation graph" : "State graph"}
+            title={project.name}
+            right={
+              mode === "design" ? (
+                <div className="graph-actions">
+                  <button onClick={addState}>
+                    <Plus size={14} /> State
+                  </button>
+                  <button
+                    onClick={() =>
+                      setNotice(
+                        "Drag from the visible handle on one state to another. The new transition will open in the Inspector.",
+                      )
+                    }
+                  >
+                    <Link2 size={14} /> Connect
+                  </button>
+                </div>
+              ) : (
+                <div className="graph-actions">
+                  <button onClick={stepBack} disabled={!history.length}>
+                    Step back
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRuntime(createRuntime(project));
+                      setHistory([]);
+                    }}
+                  >
+                    Reset
+                  </button>
+                </div>
+              )
+            }
+          />
+          {guidedMode && mode === "design" && (
+            <AuthoringGuide
+              project={project}
+              onSelect={setSelection}
+              onSimulate={() => enterMode("simulate")}
+            />
+          )}
+          <div className="graph-canvas">
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              onConnect={onConnect}
+              onNodeClick={(_, node) =>
+                setSelection({ kind: "state", id: node.id })
+              }
+              onEdgeClick={(_, edge) =>
+                setSelection({ kind: "transition", id: edge.id })
+              }
+              onInit={(instance) => {
+                graphInstance.current = instance;
+                window.setTimeout(() => instance.fitView({ padding: 0.12 }), 0);
+              }}
+              fitView
+              minZoom={0.4}
+              maxZoom={1.5}
+              zoomOnScroll={false}
+              preventScrolling={false}
+              zoomActivationKeyCode="Control"
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background color="#263558" gap={20} size={1} />
+              <MiniMap
+                nodeColor={(node) =>
+                  node.id === runtime.stateId ? "#79a6ff" : "#26385d"
+                }
+                maskColor="rgba(8,12,25,.7)"
+              />
+              <Controls showInteractive={false} />
+            </ReactFlow>
+          </div>
+          <div className="graph-transition-strip">
+            <span>TRANSITIONS</span>
+            {[...project.transitions]
+              .sort(
+                (a, b) =>
+                  a.from.localeCompare(b.from) ||
+                  a.event.localeCompare(b.event) ||
+                  a.priority - b.priority,
+              )
+              .map((item) => (
+                <button
+                  key={item.id}
+                  className={`${runtime.lastTransitionId === item.id ? "fired" : ""} ${selection?.kind === "transition" && selection.id === item.id ? "selected" : ""}`}
+                  onClick={() =>
+                    setSelection({ kind: "transition", id: item.id })
+                  }
+                >
+                  {item.priority} · {item.label || item.event}
+                </button>
+              ))}
+          </div>
+          <div className="graph-note">
+            <span>
+              <i className="dot live" /> Active state
+            </span>
+            <span>
+              <i className="dot fired" /> Last transition
+            </span>
+            <span>Drag a handle to connect</span>
+            <span>Ctrl + wheel to zoom</span>
+            <span>Mode: {mode}</span>
+          </div>
+        </section>
+        <div className="right-column">
+          <section className="panel controls-panel">
+            <Title eyebrow="Operator controls" title="Only legal actions" />
+            {guidedMode && (
+              <div className="operator-guide">
+                <strong>
+                  {mode === "simulate" ? "Test safely" : "Operator sequence"}
+                </strong>
+                <span>
+                  Prepare data, Take, then use only the actions offered by the
+                  runtime.
+                </span>
+              </div>
+            )}
+            <p>
+              {
+                project.states.find((item) => item.id === runtime.stateId)
+                  ?.description
+              }
+            </p>
+            <EventControls
+              events={allowed}
+              runtime={runtime}
+              dispatch={dispatch}
+            />
+            <div
+              className={`notice ${notice.includes("not ") || notice.includes("Fix") ? "warning" : ""}`}
+            >
+              {notice.includes("not ") || notice.includes("Fix") ? (
+                <AlertCircle size={15} />
+              ) : (
+                <Check size={15} />
+              )}
+              {notice}
+            </div>
+            {mode === "simulate" && (
+              <ScenarioControls
+                history={history}
+                scenarios={scenarios}
+                onSave={saveScenario}
+                onReplay={replayScenario}
+                onDelete={(id) =>
+                  setScenarios((items) =>
+                    items.filter((item) => item.id !== id),
+                  )
+                }
+              />
+            )}
+          </section>
+          <section className="panel inspector-panel">
+            <Title
+              eyebrow="Inspector"
+              title={
+                transition
+                  ? "Transition"
+                  : state
+                    ? "State"
+                    : selectedEvent
+                      ? "Event contract"
+                      : selectedVariable
+                        ? "Variable contract"
+                        : "Select a graph item"
+              }
+            />
+            <div className="inspector-scroll">
+              {state && (
+                <div className="inspector-content">
+                  <div className="selection-explainer">
+                    <strong>State = stable situation</strong>
+                    <span>
+                      Use a variable for text, scores, choices, and other
+                      changing data.
+                    </span>
+                  </div>
+                  <Info label="State ID" value={state.id} />
+                  <label>
+                    Name
+                    <input
+                      disabled={mode === "simulate"}
+                      value={state.label}
+                      onChange={(event) =>
+                        setProject((current) => ({
+                          ...current,
+                          states: current.states.map((item) =>
+                            item.id === state.id
+                              ? { ...item, label: event.target.value }
+                              : item,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    Description
+                    <textarea
+                      disabled={mode === "simulate"}
+                      value={state.description || ""}
+                      onChange={(event) =>
+                        setProject((current) => ({
+                          ...current,
+                          states: current.states.map((item) =>
+                            item.id === state.id
+                              ? { ...item, description: event.target.value }
+                              : item,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                  {mode === "design" && state.id !== project.initialStateId && (
+                    <button
+                      className="delete-transition"
+                      onClick={() => {
+                        if (
+                          !confirm(
+                            `Delete ${state.label} and its connected transitions?`,
+                          )
+                        )
+                          return;
+                        setProject((current) => ({
+                          ...current,
+                          states: current.states.filter(
+                            (item) => item.id !== state.id,
+                          ),
+                          transitions: current.transitions.filter(
+                            (item) =>
+                              item.from !== state.id && item.to !== state.id,
+                          ),
+                        }));
+                        setSelection({
+                          kind: "state",
+                          id: project.initialStateId,
+                        });
+                      }}
+                    >
+                      Delete state
+                    </button>
+                  )}
+                </div>
+              )}
+              {mode === "design" && transition && (
+                <TransitionEditor
+                  key={transition.id}
+                  transition={transition}
+                  project={project}
+                  onSave={(next) =>
+                    setProject((current) => ({
+                      ...current,
+                      transitions: current.transitions.map((item) =>
+                        item.id === next.id ? next : item,
+                      ),
+                    }))
+                  }
+                  onDelete={() => {
+                    setProject((current) => ({
+                      ...current,
+                      transitions: current.transitions.filter(
+                        (item) => item.id !== transition.id,
+                      ),
+                    }));
+                    setSelection(null);
+                  }}
+                />
+              )}
+              {mode === "simulate" && transition && (
+                <div className="inspector-content">
+                  <Info label="Event" value={transition.event} />
+                  <Info label="Priority" value={String(transition.priority)} />
+                  <Info label="From" value={transition.from} />
+                  <Info label="To" value={transition.to} />
+                  <Info
+                    label="Condition"
+                    value={conditionText(transition.condition)}
+                  />
+                  <div className="action-list">
+                    <small>ACTIONS</small>
+                    {transition.actions.map((action, index) => (
+                      <div key={index}>
+                        <b>{index + 1}</b>
+                        {actionText(action)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {mode === "design" && selectedEvent && (
+                <EventContractEditor
+                  event={selectedEvent}
+                  onChange={(next) =>
+                    setProject((current) => ({
+                      ...current,
+                      events: current.events.map((item) =>
+                        item.id === selectedEvent.id ? next : item,
+                      ),
+                      transitions: current.transitions.map((item) =>
+                        item.event === selectedEvent.id
+                          ? { ...item, event: next.id }
+                          : item,
+                      ),
+                    }))
+                  }
+                />
+              )}
+              {mode === "design" && selectedVariable && (
+                <VariableContractEditor
+                  variable={selectedVariable}
+                  onChange={(next) =>
+                    setProject((current) => ({
+                      ...current,
+                      variables: current.variables.map((item) =>
+                        item.id === selectedVariable.id ? next : item,
+                      ),
+                    }))
+                  }
+                />
+              )}
+              {mode === "simulate" && (
+                <SimulationTimeline
+                  history={history}
+                  selected={selectedHistory}
+                  onSelect={setSelectedHistory}
+                />
+              )}
+              {mode === "simulate" && lastTrace && (
+                <TracePanel trace={lastTrace} project={project} />
+              )}
+            </div>
+          </section>
+          {mode === "design" && (
+            <DataContractsPanel
+              project={project}
+              selection={selection}
+              onSelect={setSelection}
+              onAddEvent={addEvent}
+              onAddVariable={addVariable}
+            />
+          )}
+          {mode === "design" && (
+            <GraphicContractPanel project={project} onSelect={setSelection} />
+          )}
+          <section className="panel validation-panel">
+            <Title
+              eyebrow="Flow health"
+              title={hasErrors ? "Needs attention" : "Looking good"}
+            />
+            {diagnostics.length ? (
+              diagnostics.map((item, index) => (
+                <div className={`diagnostic ${item.level}`} key={index}>
+                  <AlertCircle size={14} />
+                  {item.message}
+                </div>
+              ))
+            ) : (
+              <div className="diagnostic okay">
+                <Check size={14} /> No structural issues found.
+              </div>
+            )}
+            {mode === "design" && (
+              <button
+                className="text-action"
+                onClick={() =>
+                  loadProject(quizProject, "Quiz reference restored.")
+                }
+              >
+                <RotateCcw size={14} /> Restore quiz reference
+              </button>
+            )}
+          </section>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AuthoringGuide({
+  project,
+  onSelect,
+  onSimulate,
+}: {
+  project: FlowProject;
+  onSelect: (selection: Selection) => void;
+  onSimulate: () => void;
+}) {
+  const exampleState =
+    project.states.find((item) => item.id !== project.initialStateId) ??
+    project.states[0];
+  const exampleTransition =
+    project.transitions.find((item) => item.from !== "*") ??
+    project.transitions[0];
+  const exampleVariable = project.variables[0];
+  return (
+    <div className="author-guide">
+      <div>
+        <small>BUILD THIS FLOW</small>
+        <strong>Modify the working example, then test it.</strong>
+      </div>
+      <button
+        onClick={() =>
+          exampleState && onSelect({ kind: "state", id: exampleState.id })
+        }
+      >
+        <b>1</b>
+        <span>
+          Edit a state<small>Stable on-air situation</small>
+        </span>
+      </button>
+      <button
+        onClick={() =>
+          exampleTransition &&
+          onSelect({ kind: "transition", id: exampleTransition.id })
+        }
+      >
+        <b>2</b>
+        <span>
+          Edit a transition<small>Event, rules, and actions</small>
+        </span>
+      </button>
+      <button
+        onClick={() =>
+          exampleVariable &&
+          onSelect({ kind: "variable", id: exampleVariable.id })
+        }
+      >
+        <b>3</b>
+        <span>
+          Connect the data<small>Variables feed the renderer</small>
+        </span>
+      </button>
+      <button onClick={onSimulate}>
+        <b>4</b>
+        <span>
+          Test the result<small>Only legal actions appear</small>
+        </span>
+      </button>
+    </div>
+  );
+}
+
+function Title({
+  eyebrow,
+  title,
+  right,
+}: {
+  eyebrow: string;
+  title: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="panel-title">
+      <div>
+        <small>{eyebrow}</small>
+        <h2>{title}</h2>
+      </div>
+      {right}
+    </div>
+  );
+}
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="info-row">
+      <small>{label}</small>
+      <span>{value}</span>
+    </div>
+  );
+}
+
+function DataContractsPanel({
+  project,
+  selection,
+  onSelect,
+  onAddEvent,
+  onAddVariable,
+}: {
+  project: FlowProject;
+  selection: Selection;
+  onSelect: (selection: Selection) => void;
+  onAddEvent: () => void;
+  onAddVariable: () => void;
+}) {
+  return (
+    <section className="panel contracts-panel">
+      <Title eyebrow="Data contracts" title="Events and variables" />
+      <div className="contract-group">
+        <div>
+          <small>EVENTS</small>
+          <button onClick={onAddEvent}>
+            <Plus size={12} /> Event
+          </button>
+        </div>
+        {project.events.map((event) => (
+          <button
+            key={event.id}
+            className={
+              selection?.kind === "event" && selection.id === event.id
+                ? "selected"
+                : ""
+            }
+            onClick={() => onSelect({ kind: "event", id: event.id })}
+          >
+            <span>
+              {event.label}
+              <small>{event.id}</small>
+            </span>
+            <b>{event.payload?.length ?? 0} fields</b>
+          </button>
+        ))}
+      </div>
+      <div className="contract-group">
+        <div>
+          <small>VARIABLES</small>
+          <button onClick={onAddVariable}>
+            <Plus size={12} /> Variable
+          </button>
+        </div>
+        {project.variables.map((variable) => (
+          <button
+            key={variable.id}
+            className={
+              selection?.kind === "variable" && selection.id === variable.id
+                ? "selected"
+                : ""
+            }
+            onClick={() => onSelect({ kind: "variable", id: variable.id })}
+          >
+            <span>
+              {variable.label}
+              <small>{variable.id}</small>
+            </span>
+            <b>{variable.type}</b>
+          </button>
+        ))}
       </div>
     </section>
-  </main>;
+  );
 }
 
-function Title({ eyebrow, title, right }: { eyebrow: string; title: string; right?: React.ReactNode }) { return <div className="panel-title"><div><small>{eyebrow}</small><h2>{title}</h2></div>{right}</div>; }
-function Info({ label, value }: { label: string; value: string }) { return <div className="info-row"><small>{label}</small><span>{value}</span></div>; }
+function GraphicContractPanel({
+  project,
+  onSelect,
+}: {
+  project: FlowProject;
+  onSelect: (selection: Selection) => void;
+}) {
+  const renderer = project.metadata?.renderer ?? "generic";
+  const animations = [
+    ...new Set(
+      project.transitions.flatMap((transition) =>
+        transition.actions
+          .filter(
+            (
+              action,
+            ): action is Extract<FlowAction, { type: "play-animation" }> =>
+              action.type === "play-animation",
+          )
+          .map((action) => action.animation),
+      ),
+    ),
+  ];
+  return (
+    <section className="panel graphic-contract-panel">
+      <Title eyebrow="Graphic connection" title="What the renderer receives" />
+      <div className="graphic-contract-intro">
+        <strong>{renderer} renderer</strong>
+        <p>
+          The renderer stays mounted. Flow sends its current state, variable
+          values, and named animation actions. Flow does not contain the visual
+          design or animation timeline.
+        </p>
+      </div>
+      <div className="contract-map">
+        <small>STATE</small>
+        <span>Controls which stable visual situation is shown</span>
+        <small>DATA</small>
+        <div>
+          {project.variables.length ? (
+            project.variables.map((variable) => (
+              <button
+                key={variable.id}
+                onClick={() => onSelect({ kind: "variable", id: variable.id })}
+              >
+                <b>{variable.label}</b>
+                <span>← {variable.id}</span>
+              </button>
+            ))
+          ) : (
+            <span>No variables yet</span>
+          )}
+        </div>
+        <small>ANIMATIONS</small>
+        <div>
+          {animations.length ? (
+            animations.map((animation) => (
+              <code key={animation}>{animation}</code>
+            ))
+          ) : (
+            <span>No named animation actions yet</span>
+          )}
+        </div>
+      </div>
+      <p className="graphic-contract-note">
+        This reference renderer is pre-wired. Editable visual slot mapping
+        belongs to the next design-layer integration, while the Flow contract
+        remains platform-neutral.
+      </p>
+    </section>
+  );
+}
 
-function DataContractsPanel({ project, selection, onSelect, onAddEvent, onAddVariable }: { project: FlowProject; selection: Selection; onSelect: (selection: Selection) => void; onAddEvent: () => void; onAddVariable: () => void }) { return <section className="panel contracts-panel"><Title eyebrow="Data contracts" title="Events and variables" /><div className="contract-group"><div><small>EVENTS</small><button onClick={onAddEvent}><Plus size={12} /> Event</button></div>{project.events.map((event) => <button key={event.id} className={selection?.kind === "event" && selection.id === event.id ? "selected" : ""} onClick={() => onSelect({ kind: "event", id: event.id })}><span>{event.label}<small>{event.id}</small></span><b>{event.payload?.length ?? 0} fields</b></button>)}</div><div className="contract-group"><div><small>VARIABLES</small><button onClick={onAddVariable}><Plus size={12} /> Variable</button></div>{project.variables.map((variable) => <button key={variable.id} className={selection?.kind === "variable" && selection.id === variable.id ? "selected" : ""} onClick={() => onSelect({ kind: "variable", id: variable.id })}><span>{variable.label}<small>{variable.id}</small></span><b>{variable.type}</b></button>)}</div></section>; }
+function parseOptions(
+  raw: string,
+  type: FlowField["type"],
+): FlowValue[] | undefined {
+  const values = raw
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) =>
+      type === "number"
+        ? Number(item)
+        : type === "boolean"
+          ? item === "true"
+          : item,
+    );
+  return values.length ? values : undefined;
+}
+function typedValue(raw: string, type: FlowField["type"]): FlowValue {
+  if (raw === "") return type === "string" ? "" : null;
+  return type === "number"
+    ? Number(raw)
+    : type === "boolean"
+      ? raw === "true"
+      : raw;
+}
 
-function parseOptions(raw: string, type: FlowField["type"]): FlowValue[] | undefined { const values = raw.split(",").map((item) => item.trim()).filter(Boolean).map((item) => type === "number" ? Number(item) : type === "boolean" ? item === "true" : item); return values.length ? values : undefined; }
-function typedValue(raw: string, type: FlowField["type"]): FlowValue { if (raw === "") return type === "string" ? "" : null; return type === "number" ? Number(raw) : type === "boolean" ? raw === "true" : raw; }
+function FieldEditor({
+  field,
+  onChange,
+  onRemove,
+}: {
+  field: FlowField;
+  onChange: (field: FlowField) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="field-editor">
+      <label>
+        Field ID
+        <input
+          value={field.id}
+          onChange={(event) =>
+            onChange({ ...field, id: event.target.value.replace(/\W/g, "") })
+          }
+        />
+      </label>
+      <label>
+        Label
+        <input
+          value={field.label}
+          onChange={(event) =>
+            onChange({ ...field, label: event.target.value })
+          }
+        />
+      </label>
+      <label>
+        Type
+        <select
+          value={field.type}
+          onChange={(event) =>
+            onChange({
+              ...field,
+              type: event.target.value as FlowField["type"],
+              options: undefined,
+              minimum: undefined,
+              maximum: undefined,
+              step: undefined,
+            })
+          }
+        >
+          <option value="string">String</option>
+          <option value="number">Number</option>
+          <option value="boolean">Boolean</option>
+        </select>
+      </label>
+      <label className="check-label">
+        <input
+          type="checkbox"
+          checked={field.required ?? false}
+          onChange={(event) =>
+            onChange({ ...field, required: event.target.checked })
+          }
+        />{" "}
+        Required
+      </label>
+      <label>
+        Options
+        <input
+          value={field.options?.join(", ") ?? ""}
+          placeholder="Comma-separated"
+          onChange={(event) =>
+            onChange({
+              ...field,
+              options: parseOptions(event.target.value, field.type),
+            })
+          }
+        />
+      </label>
+      {field.type === "number" && (
+        <div className="number-constraints">
+          <label>
+            Min
+            <input
+              type="number"
+              value={field.minimum ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...field,
+                  minimum:
+                    event.target.value === ""
+                      ? undefined
+                      : Number(event.target.value),
+                })
+              }
+            />
+          </label>
+          <label>
+            Max
+            <input
+              type="number"
+              value={field.maximum ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...field,
+                  maximum:
+                    event.target.value === ""
+                      ? undefined
+                      : Number(event.target.value),
+                })
+              }
+            />
+          </label>
+          <label>
+            Step
+            <input
+              type="number"
+              value={field.step ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...field,
+                  step:
+                    event.target.value === ""
+                      ? undefined
+                      : Number(event.target.value),
+                })
+              }
+            />
+          </label>
+        </div>
+      )}
+      <button className="remove-action" onClick={onRemove}>
+        Remove field
+      </button>
+    </div>
+  );
+}
 
-function FieldEditor({ field, onChange, onRemove }: { field: FlowField; onChange: (field: FlowField) => void; onRemove: () => void }) { return <div className="field-editor"><label>Field ID<input value={field.id} onChange={(event) => onChange({ ...field, id: event.target.value.replace(/\W/g, "") })} /></label><label>Label<input value={field.label} onChange={(event) => onChange({ ...field, label: event.target.value })} /></label><label>Type<select value={field.type} onChange={(event) => onChange({ ...field, type: event.target.value as FlowField["type"], options: undefined, minimum: undefined, maximum: undefined, step: undefined })}><option value="string">String</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label><label className="check-label"><input type="checkbox" checked={field.required ?? false} onChange={(event) => onChange({ ...field, required: event.target.checked })} /> Required</label><label>Options<input value={field.options?.join(", ") ?? ""} placeholder="Comma-separated" onChange={(event) => onChange({ ...field, options: parseOptions(event.target.value, field.type) })} /></label>{field.type === "number" && <div className="number-constraints"><label>Min<input type="number" value={field.minimum ?? ""} onChange={(event) => onChange({ ...field, minimum: event.target.value === "" ? undefined : Number(event.target.value) })} /></label><label>Max<input type="number" value={field.maximum ?? ""} onChange={(event) => onChange({ ...field, maximum: event.target.value === "" ? undefined : Number(event.target.value) })} /></label><label>Step<input type="number" value={field.step ?? ""} onChange={(event) => onChange({ ...field, step: event.target.value === "" ? undefined : Number(event.target.value) })} /></label></div>}<button className="remove-action" onClick={onRemove}>Remove field</button></div>; }
+function EventContractEditor({
+  event,
+  onChange,
+}: {
+  event: FlowProject["events"][number];
+  onChange: (event: FlowProject["events"][number]) => void;
+}) {
+  const fields = event.payload ?? [];
+  return (
+    <div className="inspector-content contract-editor">
+      <label>
+        Event ID
+        <input
+          value={event.id}
+          readOnly
+          title="Event IDs stay stable after creation"
+        />
+      </label>
+      <label>
+        Label
+        <input
+          value={event.label}
+          onChange={(change) =>
+            onChange({ ...event, label: change.target.value })
+          }
+        />
+      </label>
+      <label>
+        Description
+        <textarea
+          value={event.description ?? ""}
+          onChange={(change) =>
+            onChange({ ...event, description: change.target.value })
+          }
+        />
+      </label>
+      <label>
+        Source
+        <select
+          value={event.source ?? "operator"}
+          onChange={(change) =>
+            onChange({
+              ...event,
+              source: change.target.value as NonNullable<typeof event.source>,
+            })
+          }
+        >
+          <option value="operator">Operator</option>
+          <option value="external">External</option>
+          <option value="animation-complete">Animation complete</option>
+        </select>
+      </label>
+      {event.source === "animation-complete" && (
+        <label>
+          Animation name
+          <input
+            value={event.animation ?? ""}
+            onChange={(change) =>
+              onChange({ ...event, animation: change.target.value })
+            }
+          />
+        </label>
+      )}
+      <div className="contract-heading">
+        <small>PAYLOAD FIELDS</small>
+        <button
+          onClick={() =>
+            onChange({
+              ...event,
+              payload: [
+                ...fields,
+                {
+                  id: `field${fields.length + 1}`,
+                  label: "New field",
+                  type: "string",
+                },
+              ],
+            })
+          }
+        >
+          <Plus size={12} /> Field
+        </button>
+      </div>
+      {fields.map((field, index) => (
+        <FieldEditor
+          key={index}
+          field={field}
+          onChange={(next) =>
+            onChange({
+              ...event,
+              payload: fields.map((item, itemIndex) =>
+                itemIndex === index ? next : item,
+              ),
+            })
+          }
+          onRemove={() =>
+            onChange({
+              ...event,
+              payload: fields.filter((_, itemIndex) => itemIndex !== index),
+            })
+          }
+        />
+      ))}
+      <GenericControlPreview event={event} />
+    </div>
+  );
+}
 
-function EventContractEditor({ event, onChange }: { event: FlowProject["events"][number]; onChange: (event: FlowProject["events"][number]) => void }) { const fields = event.payload ?? []; return <div className="inspector-content contract-editor"><label>Event ID<input value={event.id} readOnly title="Event IDs stay stable after creation" /></label><label>Label<input value={event.label} onChange={(change) => onChange({ ...event, label: change.target.value })} /></label><label>Description<textarea value={event.description ?? ""} onChange={(change) => onChange({ ...event, description: change.target.value })} /></label><label>Source<select value={event.source ?? "operator"} onChange={(change) => onChange({ ...event, source: change.target.value as NonNullable<typeof event.source> })}><option value="operator">Operator</option><option value="external">External</option><option value="animation-complete">Animation complete</option></select></label>{event.source === "animation-complete" && <label>Animation name<input value={event.animation ?? ""} onChange={(change) => onChange({ ...event, animation: change.target.value })} /></label>}<div className="contract-heading"><small>PAYLOAD FIELDS</small><button onClick={() => onChange({ ...event, payload: [...fields, { id: `field${fields.length + 1}`, label: "New field", type: "string" }] })}><Plus size={12} /> Field</button></div>{fields.map((field, index) => <FieldEditor key={index} field={field} onChange={(next) => onChange({ ...event, payload: fields.map((item, itemIndex) => itemIndex === index ? next : item) })} onRemove={() => onChange({ ...event, payload: fields.filter((_, itemIndex) => itemIndex !== index) })} />)}<GenericControlPreview event={event} /></div>; }
+function VariableContractEditor({
+  variable,
+  onChange,
+}: {
+  variable: FlowVariable;
+  onChange: (variable: FlowVariable) => void;
+}) {
+  return (
+    <div className="inspector-content contract-editor">
+      <label>
+        Variable ID
+        <input
+          value={variable.id}
+          readOnly
+          title="Variable IDs stay stable after creation"
+        />
+      </label>
+      <label>
+        Label
+        <input
+          value={variable.label}
+          onChange={(event) =>
+            onChange({ ...variable, label: event.target.value })
+          }
+        />
+      </label>
+      <label>
+        Type
+        <select
+          value={variable.type}
+          onChange={(event) => {
+            const type = event.target.value as FlowField["type"];
+            onChange({
+              ...variable,
+              type,
+              defaultValue:
+                type === "number" ? 0 : type === "boolean" ? false : "",
+              options: undefined,
+              minimum: undefined,
+              maximum: undefined,
+              step: undefined,
+            });
+          }}
+        >
+          <option value="string">String</option>
+          <option value="number">Number</option>
+          <option value="boolean">Boolean</option>
+        </select>
+      </label>
+      <label>
+        Default value
+        {variable.type === "boolean" ? (
+          <select
+            value={String(variable.defaultValue)}
+            onChange={(event) =>
+              onChange({
+                ...variable,
+                defaultValue: event.target.value === "true",
+              })
+            }
+          >
+            <option value="true">True</option>
+            <option value="false">False</option>
+          </select>
+        ) : (
+          <input
+            type={variable.type === "number" ? "number" : "text"}
+            value={
+              variable.defaultValue === null
+                ? ""
+                : String(variable.defaultValue)
+            }
+            onChange={(event) =>
+              onChange({
+                ...variable,
+                defaultValue: typedValue(event.target.value, variable.type),
+              })
+            }
+          />
+        )}
+      </label>
+      <label className="check-label">
+        <input
+          type="checkbox"
+          checked={variable.operatorEditable ?? false}
+          onChange={(event) =>
+            onChange({ ...variable, operatorEditable: event.target.checked })
+          }
+        />{" "}
+        Operator editable before Take
+      </label>
+      <label>
+        Options
+        <input
+          value={variable.options?.join(", ") ?? ""}
+          placeholder="Comma-separated"
+          onChange={(event) =>
+            onChange({
+              ...variable,
+              options: parseOptions(event.target.value, variable.type),
+            })
+          }
+        />
+      </label>
+      {variable.type === "number" && (
+        <div className="number-constraints">
+          <label>
+            Min
+            <input
+              type="number"
+              value={variable.minimum ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...variable,
+                  minimum:
+                    event.target.value === ""
+                      ? undefined
+                      : Number(event.target.value),
+                })
+              }
+            />
+          </label>
+          <label>
+            Max
+            <input
+              type="number"
+              value={variable.maximum ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...variable,
+                  maximum:
+                    event.target.value === ""
+                      ? undefined
+                      : Number(event.target.value),
+                })
+              }
+            />
+          </label>
+          <label>
+            Step
+            <input
+              type="number"
+              value={variable.step ?? ""}
+              onChange={(event) =>
+                onChange({
+                  ...variable,
+                  step:
+                    event.target.value === ""
+                      ? undefined
+                      : Number(event.target.value),
+                })
+              }
+            />
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
 
-function VariableContractEditor({ variable, onChange }: { variable: FlowVariable; onChange: (variable: FlowVariable) => void }) { return <div className="inspector-content contract-editor"><label>Variable ID<input value={variable.id} readOnly title="Variable IDs stay stable after creation" /></label><label>Label<input value={variable.label} onChange={(event) => onChange({ ...variable, label: event.target.value })} /></label><label>Type<select value={variable.type} onChange={(event) => { const type = event.target.value as FlowField["type"]; onChange({ ...variable, type, defaultValue: type === "number" ? 0 : type === "boolean" ? false : "", options: undefined, minimum: undefined, maximum: undefined, step: undefined }); }}><option value="string">String</option><option value="number">Number</option><option value="boolean">Boolean</option></select></label><label>Default value{variable.type === "boolean" ? <select value={String(variable.defaultValue)} onChange={(event) => onChange({ ...variable, defaultValue: event.target.value === "true" })}><option value="true">True</option><option value="false">False</option></select> : <input type={variable.type === "number" ? "number" : "text"} value={variable.defaultValue === null ? "" : String(variable.defaultValue)} onChange={(event) => onChange({ ...variable, defaultValue: typedValue(event.target.value, variable.type) })} />}</label><label className="check-label"><input type="checkbox" checked={variable.operatorEditable ?? false} onChange={(event) => onChange({ ...variable, operatorEditable: event.target.checked })} /> Operator editable before Take</label><label>Options<input value={variable.options?.join(", ") ?? ""} placeholder="Comma-separated" onChange={(event) => onChange({ ...variable, options: parseOptions(event.target.value, variable.type) })} /></label>{variable.type === "number" && <div className="number-constraints"><label>Min<input type="number" value={variable.minimum ?? ""} onChange={(event) => onChange({ ...variable, minimum: event.target.value === "" ? undefined : Number(event.target.value) })} /></label><label>Max<input type="number" value={variable.maximum ?? ""} onChange={(event) => onChange({ ...variable, maximum: event.target.value === "" ? undefined : Number(event.target.value) })} /></label><label>Step<input type="number" value={variable.step ?? ""} onChange={(event) => onChange({ ...variable, step: event.target.value === "" ? undefined : Number(event.target.value) })} /></label></div>}</div>; }
+function GenericControlPreview({
+  event,
+}: {
+  event: FlowProject["events"][number];
+}) {
+  return (
+    <div className="control-preview">
+      <small>GENERATED CONTROL PREVIEW</small>
+      <strong>{event.label}</strong>
+      {event.payload?.map((field) => (
+        <label key={field.id}>
+          {field.label}
+          {field.options?.length ? (
+            <select disabled>
+              {field.options.map((option) => (
+                <option key={String(option)}>{String(option)}</option>
+              ))}
+            </select>
+          ) : field.type === "boolean" ? (
+            <input disabled type="checkbox" />
+          ) : (
+            <input
+              disabled
+              type={field.type === "number" ? "number" : "text"}
+            />
+          )}
+        </label>
+      ))}
+    </div>
+  );
+}
 
-function GenericControlPreview({ event }: { event: FlowProject["events"][number] }) { return <div className="control-preview"><small>GENERATED CONTROL PREVIEW</small><strong>{event.label}</strong>{event.payload?.map((field) => <label key={field.id}>{field.label}{field.options?.length ? <select disabled>{field.options.map((option) => <option key={String(option)}>{String(option)}</option>)}</select> : field.type === "boolean" ? <input disabled type="checkbox" /> : <input disabled type={field.type === "number" ? "number" : "text"} />}</label>)}</div>; }
+function ScenarioControls({
+  history,
+  scenarios,
+  onSave,
+  onReplay,
+  onDelete,
+}: {
+  history: HistoryItem[];
+  scenarios: FlowScenario[];
+  onSave: () => void;
+  onReplay: (scenario: FlowScenario) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div className="scenario-controls">
+      <div>
+        <small>SCENARIOS</small>
+        <button disabled={!history.length} onClick={onSave}>
+          Save current run
+        </button>
+      </div>
+      {scenarios.length === 0 ? (
+        <p>No saved scenarios yet.</p>
+      ) : (
+        scenarios.map((scenario) => (
+          <div key={scenario.id}>
+            <button onClick={() => onReplay(scenario)}>
+              <span>
+                {scenario.name}
+                <small>{scenario.events.length} events</small>
+              </span>
+            </button>
+            <button
+              className="remove-action"
+              aria-label={`Delete ${scenario.name}`}
+              onClick={() => onDelete(scenario.id)}
+            >
+              ×
+            </button>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
 
-function ScenarioControls({ history, scenarios, onSave, onReplay, onDelete }: { history: HistoryItem[]; scenarios: FlowScenario[]; onSave: () => void; onReplay: (scenario: FlowScenario) => void; onDelete: (id: string) => void }) { return <div className="scenario-controls"><div><small>SCENARIOS</small><button disabled={!history.length} onClick={onSave}>Save current run</button></div>{scenarios.length === 0 ? <p>No saved scenarios yet.</p> : scenarios.map((scenario) => <div key={scenario.id}><button onClick={() => onReplay(scenario)}><span>{scenario.name}<small>{scenario.events.length} events</small></span></button><button className="remove-action" aria-label={`Delete ${scenario.name}`} onClick={() => onDelete(scenario.id)}>×</button></div>)}</div>; }
+function SimulationTimeline({
+  history,
+  selected,
+  onSelect,
+}: {
+  history: HistoryItem[];
+  selected: number | null;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <div className="simulation-timeline">
+      <small>EVENT HISTORY</small>
+      {history.length === 0 ? (
+        <p>Run an operator event to begin the trace.</p>
+      ) : (
+        history.map((item, index) => (
+          <button
+            key={index}
+            className={
+              (selected ?? history.length - 1) === index ? "selected" : ""
+            }
+            onClick={() => onSelect(index)}
+          >
+            <b>{index + 1}</b>
+            <span>
+              {item.event.id}
+              <small>
+                {item.before.stateId} →{" "}
+                {item.trace.at(-1)?.resultingStateId ?? item.before.stateId}
+              </small>
+            </span>
+          </button>
+        ))
+      )}
+    </div>
+  );
+}
 
-function SimulationTimeline({ history, selected, onSelect }: { history: HistoryItem[]; selected: number | null; onSelect: (index: number) => void }) { return <div className="simulation-timeline"><small>EVENT HISTORY</small>{history.length === 0 ? <p>Run an operator event to begin the trace.</p> : history.map((item, index) => <button key={index} className={(selected ?? history.length - 1) === index ? "selected" : ""} onClick={() => onSelect(index)}><b>{index + 1}</b><span>{item.event.id}<small>{item.before.stateId} → {item.trace.at(-1)?.resultingStateId ?? item.before.stateId}</small></span></button>)}</div>; }
-
-function EventControls({ events, runtime, dispatch }: { events: AvailableEvent[]; runtime: RuntimeState; dispatch: (event: FlowEventPayload) => void }) {
+function EventControls({
+  events,
+  runtime,
+  dispatch,
+}: {
+  events: AvailableEvent[];
+  runtime: RuntimeState;
+  dispatch: (event: FlowEventPayload) => void;
+}) {
   const select = events.find((event) => event.id === "SELECT_ANSWER");
   const options = select?.payload?.[0]?.options ?? [];
-  return <>{select && <div className="answer-controls">{options.map((option) => <button key={String(option)} className={runtime.variables.selectedAnswer === option ? "selected" : ""} onClick={() => dispatch({ id: select.id, data: { [select.payload![0].id]: option } })}>{String(option)}</button>)}</div>}<div className="command-controls">{events.filter((event) => event.id !== "SELECT_ANSWER").map((event) => <button key={event.id} className={event.presentation?.intent === "primary" ? "primary" : event.presentation?.intent === "quiet" ? "quiet" : ""} onClick={() => { const data: Record<string, FlowValue> = {}; for (const field of event.payload ?? []) { const raw = prompt(field.label); if (raw === null) return; data[field.id] = field.type === "number" ? Number(raw) : field.type === "boolean" ? raw === "true" : raw; } dispatch({ id: event.id, data }); }}>{event.label}</button>)}</div></>;
+  return (
+    <>
+      {select && (
+        <div className="answer-controls">
+          {options.map((option) => (
+            <button
+              key={String(option)}
+              className={
+                runtime.variables.selectedAnswer === option ? "selected" : ""
+              }
+              onClick={() =>
+                dispatch({
+                  id: select.id,
+                  data: { [select.payload![0].id]: option },
+                })
+              }
+            >
+              {String(option)}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="command-controls">
+        {events
+          .filter((event) => event.id !== "SELECT_ANSWER")
+          .map((event) => (
+            <button
+              key={event.id}
+              className={
+                event.presentation?.intent === "primary"
+                  ? "primary"
+                  : event.presentation?.intent === "quiet"
+                    ? "quiet"
+                    : ""
+              }
+              onClick={() => {
+                const data: Record<string, FlowValue> = {};
+                for (const field of event.payload ?? []) {
+                  const raw = prompt(field.label);
+                  if (raw === null) return;
+                  data[field.id] =
+                    field.type === "number"
+                      ? Number(raw)
+                      : field.type === "boolean"
+                        ? raw === "true"
+                        : raw;
+                }
+                dispatch({ id: event.id, data });
+              }}
+            >
+              {event.label}
+            </button>
+          ))}
+      </div>
+    </>
+  );
 }
 
-function TracePanel({ trace, project }: { trace: TransitionTrace; project: FlowProject }) { return <div className="trace-panel"><small>LAST EVENT TRACE</small><strong>{trace.event.id}: {trace.previousStateId} → {trace.resultingStateId}</strong>{trace.consideredTransitions.map((item) => <div className={item.passed ? "passed" : "failed"} key={item.transitionId}><b>{item.passed ? "PASS" : "FAIL"}</b><span>{project.transitions.find((transition) => transition.id === item.transitionId)?.label || item.transitionId}<small>{item.explanation}</small></span></div>)}</div>; }
+function TracePanel({
+  trace,
+  project,
+}: {
+  trace: TransitionTrace;
+  project: FlowProject;
+}) {
+  return (
+    <div className="trace-panel">
+      <small>LAST EVENT TRACE</small>
+      <strong>
+        {trace.event.id}: {trace.previousStateId} → {trace.resultingStateId}
+      </strong>
+      {trace.consideredTransitions.map((item) => (
+        <div
+          className={item.passed ? "passed" : "failed"}
+          key={item.transitionId}
+        >
+          <b>{item.passed ? "PASS" : "FAIL"}</b>
+          <span>
+            {project.transitions.find(
+              (transition) => transition.id === item.transitionId,
+            )?.label || item.transitionId}
+            <small>{item.explanation}</small>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-function TransitionEditor({ transition, project, onSave, onDelete }: { transition: FlowTransition; project: FlowProject; onSave: (transition: FlowTransition) => void; onDelete: () => void }) {
+function TransitionEditor({
+  transition,
+  project,
+  onSave,
+  onDelete,
+}: {
+  transition: FlowTransition;
+  project: FlowProject;
+  onSave: (transition: FlowTransition) => void;
+  onDelete: () => void;
+}) {
   const [draft, setDraft] = useState(transition);
   const dirty = JSON.stringify(draft) !== JSON.stringify(transition);
-  const errors = validateProject({ ...project, transitions: project.transitions.map((item) => item.id === draft.id ? draft : item) }).filter((item) => item.level === "error" && item.transitionId === draft.id);
-  return <section className="panel transition-editor"><Title eyebrow="Edit transition" title={draft.label || draft.event} right={<span className={`draft-status ${dirty ? "dirty" : ""}`}>{dirty ? "Unsaved changes" : "Saved"}</span>} /><div className="transition-form"><div className="transition-summary"><small>WHEN</small><strong>{draft.event}</strong><span>Branch {draft.priority} moves <b>{draft.from}</b> to <b>{draft.to}</b> when {conditionText(draft.condition).toLowerCase()}.</span></div><label>Label<input value={draft.label || ""} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></label><label>From<select value={draft.from} onChange={(event) => setDraft({ ...draft, from: event.target.value })}><option value="*">Any state</option>{project.states.map((state) => <option key={state.id} value={state.id}>{state.label}</option>)}</select></label><label>To<select value={draft.to} onChange={(event) => setDraft({ ...draft, to: event.target.value })}>{project.states.map((state) => <option key={state.id} value={state.id}>{state.label}</option>)}</select></label><label>Event<select value={draft.event} onChange={(event) => setDraft({ ...draft, event: event.target.value })}>{project.events.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label><label>Branch priority<input type="number" min="0" step="10" value={draft.priority} onChange={(event) => setDraft({ ...draft, priority: Number(event.target.value) })} /></label><ConditionEditor condition={draft.condition} project={project} eventId={draft.event} onChange={(condition) => setDraft({ ...draft, condition })} /><ActionEditor actions={draft.actions} project={project} onChange={(actions) => setDraft({ ...draft, actions })} />{errors.map((error, index) => <div className="edit-error" key={index}><AlertCircle size={14} />{error.message}</div>)}<div className="edit-actions"><button className="save-transition" disabled={!dirty || errors.length > 0} onClick={() => onSave(draft)}>Save transition</button><button disabled={!dirty} onClick={() => setDraft(transition)}>Discard</button></div><button className="delete-transition" onClick={onDelete}>Delete transition</button></div></section>;
+  const errors = validateProject({
+    ...project,
+    transitions: project.transitions.map((item) =>
+      item.id === draft.id ? draft : item,
+    ),
+  }).filter((item) => item.level === "error" && item.transitionId === draft.id);
+  return (
+    <section className="panel transition-editor">
+      <Title
+        eyebrow="Edit transition"
+        title={draft.label || draft.event}
+        right={
+          <span className={`draft-status ${dirty ? "dirty" : ""}`}>
+            {dirty ? "Unsaved changes" : "Saved"}
+          </span>
+        }
+      />
+      <div className="transition-form">
+        <div className="transition-summary">
+          <small>WHEN</small>
+          <strong>{draft.event}</strong>
+          <span>
+            Branch {draft.priority} moves <b>{draft.from}</b> to{" "}
+            <b>{draft.to}</b> when{" "}
+            {conditionText(draft.condition).toLowerCase()}.
+          </span>
+        </div>
+        <label>
+          Label
+          <input
+            value={draft.label || ""}
+            onChange={(event) =>
+              setDraft({ ...draft, label: event.target.value })
+            }
+          />
+        </label>
+        <label>
+          From
+          <select
+            value={draft.from}
+            onChange={(event) =>
+              setDraft({ ...draft, from: event.target.value })
+            }
+          >
+            <option value="*">Any state</option>
+            {project.states.map((state) => (
+              <option key={state.id} value={state.id}>
+                {state.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          To
+          <select
+            value={draft.to}
+            onChange={(event) => setDraft({ ...draft, to: event.target.value })}
+          >
+            {project.states.map((state) => (
+              <option key={state.id} value={state.id}>
+                {state.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Event
+          <select
+            value={draft.event}
+            onChange={(event) =>
+              setDraft({ ...draft, event: event.target.value })
+            }
+          >
+            {project.events.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Branch priority
+          <input
+            type="number"
+            min="0"
+            step="10"
+            value={draft.priority}
+            onChange={(event) =>
+              setDraft({ ...draft, priority: Number(event.target.value) })
+            }
+          />
+        </label>
+        <ConditionEditor
+          condition={draft.condition}
+          project={project}
+          eventId={draft.event}
+          onChange={(condition) => setDraft({ ...draft, condition })}
+        />
+        <ActionEditor
+          actions={draft.actions}
+          project={project}
+          onChange={(actions) => setDraft({ ...draft, actions })}
+        />
+        {errors.map((error, index) => (
+          <div className="edit-error" key={index}>
+            <AlertCircle size={14} />
+            {error.message}
+          </div>
+        ))}
+        <div className="edit-actions">
+          <button
+            className="save-transition"
+            disabled={!dirty || errors.length > 0}
+            onClick={() => onSave(draft)}
+          >
+            Save transition
+          </button>
+          <button disabled={!dirty} onClick={() => setDraft(transition)}>
+            Discard
+          </button>
+        </div>
+        <button className="delete-transition" onClick={onDelete}>
+          Delete transition
+        </button>
+      </div>
+    </section>
+  );
 }
 
-function ConditionEditor({ condition, project, eventId, onChange }: { condition?: FlowConditionGroup; project: FlowProject; eventId: string; onChange: (condition?: FlowConditionGroup) => void }) {
+function ConditionEditor({
+  condition,
+  project,
+  eventId,
+  onChange,
+}: {
+  condition?: FlowConditionGroup;
+  project: FlowProject;
+  eventId: string;
+  onChange: (condition?: FlowConditionGroup) => void;
+}) {
   const event = project.events.find((item) => item.id === eventId);
   const predicates = condition?.predicates ?? [];
-  const update = (index: number, predicate: FlowPredicate) => onChange({ mode: condition?.mode ?? "all", predicates: predicates.map((item, itemIndex) => itemIndex === index ? predicate : item) });
-  // @ts-expect-error TypeScript loses the object-property narrowing inside the inline find callback.
-  return <div className="condition-editor"><div><small>CONDITIONS</small><button onClick={() => onChange({ mode: condition?.mode ?? "all", predicates: [...predicates, { left: { variable: project.variables[0]?.id || "" }, operator: "is-set" }] })}>Add condition</button></div>{predicates.length > 1 && <label>Match<select value={condition?.mode} onChange={(event) => onChange({ mode: event.target.value as "all" | "any", predicates })}><option value="all">All conditions (AND)</option><option value="any">Any condition (OR)</option></select></label>}{predicates.map((predicate, index) => { const leftType = predicate.left && typeof predicate.left === "object" && "variable" in predicate.left ? project.variables.find((item) => item.id === predicate.left.variable)?.type : undefined; return <div className="predicate-editor" key={index}><ValueReferenceEditor label="Left value" value={predicate.left} variables={project.variables} fields={event?.payload ?? []} onChange={(left) => update(index, { ...predicate, left })} /><label>Rule<select value={predicate.operator} onChange={(event) => update(index, { ...predicate, operator: event.target.value as FlowPredicate["operator"], right: event.target.value.startsWith("is-") ? undefined : predicate.right ?? (leftType === "number" ? 0 : leftType === "boolean" ? false : "") })}><option value="is-set">has a value</option><option value="is-not-set">has no value</option><option value="equals">equals</option><option value="not-equals">does not equal</option><option value="greater-than">greater than</option><option value="greater-than-or-equal">greater than or equal</option><option value="less-than">less than</option><option value="less-than-or-equal">less than or equal</option></select></label>{!predicate.operator.startsWith("is-") && <ValueReferenceEditor label="Right value" value={predicate.right} expectedType={leftType} variables={project.variables} fields={event?.payload ?? []} onChange={(right) => update(index, { ...predicate, right })} />}<button className="remove-action" onClick={() => onChange(predicates.length === 1 ? undefined : { mode: condition?.mode ?? "all", predicates: predicates.filter((_, itemIndex) => itemIndex !== index) })}>×</button></div>; })}</div>;
+  const update = (index: number, predicate: FlowPredicate) =>
+    onChange({
+      mode: condition?.mode ?? "all",
+      predicates: predicates.map((item, itemIndex) =>
+        itemIndex === index ? predicate : item,
+      ),
+    });
+  return (
+    <div className="condition-editor">
+      <div>
+        <small>CONDITIONS</small>
+        <button
+          onClick={() =>
+            onChange({
+              mode: condition?.mode ?? "all",
+              predicates: [
+                ...predicates,
+                {
+                  left: { variable: project.variables[0]?.id || "" },
+                  operator: "is-set",
+                },
+              ],
+            })
+          }
+        >
+          Add condition
+        </button>
+      </div>
+      {predicates.length > 1 && (
+        <label>
+          Match
+          <select
+            value={condition?.mode}
+            onChange={(event) =>
+              onChange({
+                mode: event.target.value as "all" | "any",
+                predicates,
+              })
+            }
+          >
+            <option value="all">All conditions (AND)</option>
+            <option value="any">Any condition (OR)</option>
+          </select>
+        </label>
+      )}
+      {predicates.map((predicate, index) => {
+        const left = predicate.left;
+        const leftType =
+          left && typeof left === "object" && "variable" in left
+            ? project.variables.find((item) => item.id === left.variable)?.type
+            : undefined;
+        return (
+          <div className="predicate-editor" key={index}>
+            <ValueReferenceEditor
+              label="Left value"
+              value={predicate.left}
+              variables={project.variables}
+              fields={event?.payload ?? []}
+              onChange={(left) => update(index, { ...predicate, left })}
+            />
+            <label>
+              Rule
+              <select
+                value={predicate.operator}
+                onChange={(event) =>
+                  update(index, {
+                    ...predicate,
+                    operator: event.target.value as FlowPredicate["operator"],
+                    right: event.target.value.startsWith("is-")
+                      ? undefined
+                      : (predicate.right ??
+                        (leftType === "number"
+                          ? 0
+                          : leftType === "boolean"
+                            ? false
+                            : "")),
+                  })
+                }
+              >
+                <option value="is-set">has a value</option>
+                <option value="is-not-set">has no value</option>
+                <option value="equals">equals</option>
+                <option value="not-equals">does not equal</option>
+                <option value="greater-than">greater than</option>
+                <option value="greater-than-or-equal">
+                  greater than or equal
+                </option>
+                <option value="less-than">less than</option>
+                <option value="less-than-or-equal">less than or equal</option>
+              </select>
+            </label>
+            {!predicate.operator.startsWith("is-") && (
+              <ValueReferenceEditor
+                label="Right value"
+                value={predicate.right}
+                expectedType={leftType}
+                variables={project.variables}
+                fields={event?.payload ?? []}
+                onChange={(right) => update(index, { ...predicate, right })}
+              />
+            )}
+            <button
+              className="remove-action"
+              onClick={() =>
+                onChange(
+                  predicates.length === 1
+                    ? undefined
+                    : {
+                        mode: condition?.mode ?? "all",
+                        predicates: predicates.filter(
+                          (_, itemIndex) => itemIndex !== index,
+                        ),
+                      },
+                )
+              }
+            >
+              ×
+            </button>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-function ActionEditor({ actions, project, onChange }: { actions: FlowAction[]; project: FlowProject; onChange: (actions: FlowAction[]) => void }) { const update = (index: number, action: FlowAction) => onChange(actions.map((item, itemIndex) => itemIndex === index ? action : item)); return <div className="transition-actions"><div><small>ACTIONS</small><button onClick={() => onChange([...actions, { type: "play-animation", animation: "new-animation" }])}>Add action</button></div>{actions.map((action, index) => <div className="editable-action" key={index}><select value={action.type} onChange={(event) => update(index, event.target.value === "set-variable" ? { type: "set-variable", variable: project.variables[0]?.id || "", value: "" } : event.target.value === "emit" ? { type: "emit", event: project.events[0]?.id || "" } : { type: "play-animation", animation: "new-animation" })}><option value="play-animation">Play animation</option><option value="set-variable">Set variable</option><option value="emit">Emit event</option></select>{action.type === "play-animation" ? <input value={action.animation} onChange={(event) => update(index, { ...action, animation: event.target.value })} /> : action.type === "set-variable" ? <><select value={action.variable} onChange={(event) => update(index, { ...action, variable: event.target.value })}>{project.variables.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select><ValueReferenceEditor label="Value" value={action.value} expectedType={project.variables.find((item) => item.id === action.variable)?.type} variables={project.variables} fields={[]} onChange={(value) => update(index, { ...action, value })} /></> : <select value={action.event} onChange={(event) => update(index, { ...action, event: event.target.value })}>{project.events.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>}<button className="remove-action" onClick={() => onChange(actions.filter((_, itemIndex) => itemIndex !== index))}>×</button></div>)}</div>; }
+function ActionEditor({
+  actions,
+  project,
+  onChange,
+}: {
+  actions: FlowAction[];
+  project: FlowProject;
+  onChange: (actions: FlowAction[]) => void;
+}) {
+  const update = (index: number, action: FlowAction) =>
+    onChange(
+      actions.map((item, itemIndex) => (itemIndex === index ? action : item)),
+    );
+  return (
+    <div className="transition-actions">
+      <div>
+        <small>ACTIONS</small>
+        <button
+          onClick={() =>
+            onChange([
+              ...actions,
+              { type: "play-animation", animation: "new-animation" },
+            ])
+          }
+        >
+          Add action
+        </button>
+      </div>
+      {actions.map((action, index) => (
+        <div className="editable-action" key={index}>
+          <select
+            value={action.type}
+            onChange={(event) =>
+              update(
+                index,
+                event.target.value === "set-variable"
+                  ? {
+                      type: "set-variable",
+                      variable: project.variables[0]?.id || "",
+                      value: "",
+                    }
+                  : event.target.value === "emit"
+                    ? { type: "emit", event: project.events[0]?.id || "" }
+                    : { type: "play-animation", animation: "new-animation" },
+              )
+            }
+          >
+            <option value="play-animation">Play animation</option>
+            <option value="set-variable">Set variable</option>
+            <option value="emit">Emit event</option>
+          </select>
+          {action.type === "play-animation" ? (
+            <input
+              value={action.animation}
+              onChange={(event) =>
+                update(index, { ...action, animation: event.target.value })
+              }
+            />
+          ) : action.type === "set-variable" ? (
+            <>
+              <select
+                value={action.variable}
+                onChange={(event) =>
+                  update(index, { ...action, variable: event.target.value })
+                }
+              >
+                {project.variables.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+              <ValueReferenceEditor
+                label="Value"
+                value={action.value}
+                expectedType={
+                  project.variables.find((item) => item.id === action.variable)
+                    ?.type
+                }
+                variables={project.variables}
+                fields={[]}
+                onChange={(value) => update(index, { ...action, value })}
+              />
+            </>
+          ) : (
+            <select
+              value={action.event}
+              onChange={(event) =>
+                update(index, { ...action, event: event.target.value })
+              }
+            >
+              {project.events.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            className="remove-action"
+            onClick={() =>
+              onChange(actions.filter((_, itemIndex) => itemIndex !== index))
+            }
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-function ValueReferenceEditor({ label, value, variables, fields, expectedType, onChange }: { label: string; value?: ValueReference; variables: FlowVariable[]; fields: FlowField[]; expectedType?: FlowField["type"]; onChange: (value: ValueReference) => void }) { const kind = value && typeof value === "object" ? "variable" in value ? "variable" : "event" : "literal"; const variable = kind === "variable" && value && typeof value === "object" && "variable" in value ? variables.find((item) => item.id === value.variable) : undefined; const type = expectedType ?? variable?.type ?? "string"; return <div className="value-reference"><label>{label} source<select value={kind} onChange={(event) => onChange(event.target.value === "variable" ? { variable: variables[0]?.id || "" } : event.target.value === "event" ? { eventField: fields[0]?.id || "" } : type === "number" ? 0 : type === "boolean" ? false : "")}><option value="literal">Typed value</option><option value="variable">Variable</option>{fields.length > 0 && <option value="event">Event field</option>}</select></label>{kind === "variable" ? <label>Variable<select value={typeof value === "object" && value && "variable" in value ? value.variable : ""} onChange={(event) => onChange({ variable: event.target.value })}>{variables.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label> : kind === "event" ? <label>Event field<select value={typeof value === "object" && value && "eventField" in value ? value.eventField : ""} onChange={(event) => onChange({ eventField: event.target.value })}>{fields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}</select></label> : <label>Literal{type === "boolean" ? <select value={String(value ?? false)} onChange={(event) => onChange(event.target.value === "true")}><option value="true">True</option><option value="false">False</option></select> : <input type={type === "number" ? "number" : "text"} value={value === null || typeof value === "object" ? "" : String(value)} onChange={(event) => onChange(type === "number" ? Number(event.target.value) : event.target.value)} />}</label>}</div>; }
+function ValueReferenceEditor({
+  label,
+  value,
+  variables,
+  fields,
+  expectedType,
+  onChange,
+}: {
+  label: string;
+  value?: ValueReference;
+  variables: FlowVariable[];
+  fields: FlowField[];
+  expectedType?: FlowField["type"];
+  onChange: (value: ValueReference) => void;
+}) {
+  const kind =
+    value && typeof value === "object"
+      ? "variable" in value
+        ? "variable"
+        : "event"
+      : "literal";
+  const variable =
+    kind === "variable" &&
+    value &&
+    typeof value === "object" &&
+    "variable" in value
+      ? variables.find((item) => item.id === value.variable)
+      : undefined;
+  const type = expectedType ?? variable?.type ?? "string";
+  return (
+    <div className="value-reference">
+      <label>
+        {label} source
+        <select
+          value={kind}
+          onChange={(event) =>
+            onChange(
+              event.target.value === "variable"
+                ? { variable: variables[0]?.id || "" }
+                : event.target.value === "event"
+                  ? { eventField: fields[0]?.id || "" }
+                  : type === "number"
+                    ? 0
+                    : type === "boolean"
+                      ? false
+                      : "",
+            )
+          }
+        >
+          <option value="literal">Typed value</option>
+          <option value="variable">Variable</option>
+          {fields.length > 0 && <option value="event">Event field</option>}
+        </select>
+      </label>
+      {kind === "variable" ? (
+        <label>
+          Variable
+          <select
+            value={
+              typeof value === "object" && value && "variable" in value
+                ? value.variable
+                : ""
+            }
+            onChange={(event) => onChange({ variable: event.target.value })}
+          >
+            {variables.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : kind === "event" ? (
+        <label>
+          Event field
+          <select
+            value={
+              typeof value === "object" && value && "eventField" in value
+                ? value.eventField
+                : ""
+            }
+            onChange={(event) => onChange({ eventField: event.target.value })}
+          >
+            {fields.map((field) => (
+              <option key={field.id} value={field.id}>
+                {field.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <label>
+          Literal
+          {type === "boolean" ? (
+            <select
+              value={String(value ?? false)}
+              onChange={(event) => onChange(event.target.value === "true")}
+            >
+              <option value="true">True</option>
+              <option value="false">False</option>
+            </select>
+          ) : (
+            <input
+              type={type === "number" ? "number" : "text"}
+              value={
+                value === null || typeof value === "object" ? "" : String(value)
+              }
+              onChange={(event) =>
+                onChange(
+                  type === "number"
+                    ? Number(event.target.value)
+                    : event.target.value,
+                )
+              }
+            />
+          )}
+        </label>
+      )}
+    </div>
+  );
+}
 
-function RuntimeValueInput({ variable, value, onChange }: { variable: FlowVariable; value: FlowValue; onChange: (value: FlowValue) => void }) { if (variable.options?.length || variable.type === "boolean") { const options = variable.options?.length ? variable.options : [true, false]; return <select className="runtime-input" value={String(value ?? "")} onChange={(event) => onChange(variable.type === "number" ? Number(event.target.value) : variable.type === "boolean" ? event.target.value === "true" : event.target.value)}>{options.map((option) => <option key={String(option)} value={String(option)}>{String(option)}</option>)}</select>; } return <input className="runtime-input" type={variable.type === "number" ? "number" : "text"} min={variable.minimum} max={variable.maximum} step={variable.step} value={value === null ? "" : String(value)} onChange={(event) => onChange(variable.type === "number" ? Number(event.target.value) : event.target.value)} />; }
-
-function LowerThirdPreview({ runtime }: { runtime: RuntimeState }) { const visible = runtime.stateId !== "off"; return <div className="lower-third-frame"><div className="lower-third-safe">{visible ? <div className={`lower-third-card ${runtime.stateId}`}><span>LIVE ANALYSIS</span><strong>{String(runtime.variables.name)}</strong><p>{String(runtime.variables.role)}</p></div> : <div className="off-air-message"><span>PROGRAM</span><strong>OFF AIR</strong><small>Take to bring the lower third on air</small></div>}</div></div>; }
-function QuizPreview({ runtime }: { runtime: RuntimeState }) { const visible = runtime.stateId !== "off"; const selected = String(runtime.variables.selectedAnswer || ""); const correct = String(runtime.variables.correctAnswer || ""); const answers = [["A", "The telegraph"], ["B", "The phonograph"], ["C", "Communication satellites"], ["D", "The printing press"]]; return <div className={`quiz-frame ${visible ? "on-air" : "off-air"}`}><div className="quiz-glow" />{visible ? <div className="quiz-output" key={runtime.revision}><div className="quiz-topline"><span>LIVE QUIZ</span><b>£ 64,000</b></div><div className="question-card"><small>QUESTION 07</small><h3>Which invention made it possible to broadcast live pictures across the world?</h3></div><div className="answers">{answers.map(([letter, copy], index) => { const picked = selected === letter; const result = runtime.stateId === "result"; const tone = result ? correct === letter ? "correct" : picked ? "wrong" : "" : picked ? runtime.stateId === "locked" ? "locked" : "chosen" : ""; return <div className={`answer ${tone}`} style={{ animationDelay: `${.18 + index * .08}s` }} key={letter}><span>{letter}</span><p>{copy}</p>{result && correct === letter && <b>✓</b>}</div>; })}</div><div className="quiz-status">{runtime.stateId === "locked" ? "ANSWER LOCKED" : runtime.stateId === "result" ? selected === correct ? "CORRECT" : "RESULT" : ""}</div></div> : <div className="off-air-message"><span>PROGRAM</span><strong>OFF AIR</strong><small>Take to begin the question</small></div>}</div>; }
+function RuntimeValueInput({
+  variable,
+  value,
+  onChange,
+}: {
+  variable: FlowVariable;
+  value: FlowValue;
+  onChange: (value: FlowValue) => void;
+}) {
+  if (variable.options?.length || variable.type === "boolean") {
+    const options = variable.options?.length ? variable.options : [true, false];
+    return (
+      <select
+        className="runtime-input"
+        value={String(value ?? "")}
+        onChange={(event) =>
+          onChange(
+            variable.type === "number"
+              ? Number(event.target.value)
+              : variable.type === "boolean"
+                ? event.target.value === "true"
+                : event.target.value,
+          )
+        }
+      >
+        {options.map((option) => (
+          <option key={String(option)} value={String(option)}>
+            {String(option)}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <input
+      className="runtime-input"
+      type={variable.type === "number" ? "number" : "text"}
+      min={variable.minimum}
+      max={variable.maximum}
+      step={variable.step}
+      value={value === null ? "" : String(value)}
+      onChange={(event) =>
+        onChange(
+          variable.type === "number"
+            ? Number(event.target.value)
+            : event.target.value,
+        )
+      }
+    />
+  );
+}

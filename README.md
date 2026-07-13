@@ -16,6 +16,9 @@ The reference project is an original, broadcast-inspired quiz graphic. It implem
 - Operator controls are derived from the active state and guarded by the runtime. Impossible actions are omitted rather than silently ignored.
 - The state graph highlights the live state and most recently fired transition.
 - States, transitions, variables, conditions, and actions can be inspected. State names and descriptions are editable; states and variables can be added; nodes can be moved; graph handles create new connections.
+- Guided authoring starts by modifying a working reference and can continue from a deliberately minimal blank Flow.
+- Transition creation opens a complete draft in one stable Inspector; visible handles connect states without browser prompts.
+- The Graphic connection panel explains the state, variable, and named-animation contract received by the continuously mounted renderer.
 - Projects persist in browser local storage and can be exported/imported as readable JSON.
 - Transition edits are staged, summarized, type-aware, and checked for impossible or duplicate routes before save.
 - Permitted runtime data can be prepared before Take without turning data changes into state transitions.
@@ -83,7 +86,7 @@ Import this repository into Vercel, select the default Next.js preset, and deplo
 - The quiz preview is a reference renderer, not a general design editor.
 - Conditions deliberately stop at one AND/OR group and do not allow arbitrary scripts or nested expressions.
 - Actions are typed but only preview-facing animation and variable actions are demonstrated.
-- Connection creation and basic state/variable editing are intentionally lightweight. Rich transition/action authoring needs further UX research before expanding it.
+- Reference renderers are still pre-wired. Editable design-layer slot binding remains future work, but the contract and current mappings are visible to authors.
 - The standalone HTML player proves portable Flow JSON execution and reference rendering, but is not a playout-system compatibility claim.
 
 ## Direction

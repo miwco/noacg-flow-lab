@@ -23,3 +23,6 @@
 - Generic controls are the fallback. Graphic-specific controls may improve presentation but must not redefine legality.
 - Animation-completion events are contracts with the renderer or timeline layer, not timing implemented in Flow.
 - Do not add package regions or coordination UI until Flow instances expose stable event, data, snapshot, and subscription contracts.
+- Keep on-air preview renderers mounted across runtime updates. State, data, and animation changes must never remount or flash the complete graphic.
+- Normal wheel input over the graph must scroll the page. Require Ctrl plus wheel for graph zoom and keep this interaction explained in the UI.
+- Teach authoring by modifying a working reference before starting from a blank Flow. The help and tutorial must show states, transitions, legality, actions, variables, and the renderer contract.
