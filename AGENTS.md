@@ -26,3 +26,4 @@
 - Keep on-air preview renderers mounted across runtime updates. State, data, and animation changes must never remount or flash the complete graphic.
 - Normal wheel input over the graph must scroll the page. Require Ctrl plus wheel for graph zoom and keep this interaction explained in the UI.
 - Teach authoring by modifying a working reference before starting from a blank Flow. The help and tutorial must show states, transitions, legality, actions, variables, and the renderer contract.
+- Graph gestures are accelerators, not prerequisites. Blank-flow authoring must be completable through explicit labeled commands without dragging or prior node-editor knowledge.

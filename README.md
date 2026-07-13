@@ -17,7 +17,7 @@ The reference project is an original, broadcast-inspired quiz graphic. It implem
 - The state graph highlights the live state and most recently fired transition.
 - States, transitions, variables, conditions, and actions can be inspected. State names and descriptions are editable; states and variables can be added; nodes can be moved; graph handles create new connections.
 - Guided authoring starts by modifying a working reference and can continue from a deliberately minimal blank Flow.
-- Transition creation opens a complete draft in one stable Inspector; visible handles connect states without browser prompts.
+- Explicit Add state and Add transition commands open complete drafts in one stable Inspector. Visible handles remain an optional faster connection method.
 - The Graphic connection panel explains the state, variable, and named-animation contract received by the continuously mounted renderer.
 - Projects persist in browser local storage and can be exported/imported as readable JSON.
 - Transition edits are staged, summarized, type-aware, and checked for impossible or duplicate routes before save.
@@ -35,14 +35,14 @@ The reference project is an original, broadcast-inspired quiz graphic. It implem
 
 The reusable model is in [`src/flow`](src/flow):
 
-| Concept | Meaning |
-| --- | --- |
-| State | A stable, meaningful on-air condition, such as `LOCKED`. |
-| Event | An operator action or external trigger, such as `REVEAL`. |
-| Transition | A legal route from a source state to a destination state for an event. |
-| Variable | Changing data, such as `selectedAnswer`, kept separate from state. |
-| Condition group | A bounded set of typed predicates combined with AND or OR. |
-| Action | A generic effect: set a variable, play a named animation, or emit an event. |
+| Concept         | Meaning                                                                     |
+| --------------- | --------------------------------------------------------------------------- |
+| State           | A stable, meaningful on-air condition, such as `LOCKED`.                    |
+| Event           | An operator action or external trigger, such as `REVEAL`.                   |
+| Transition      | A legal route from a source state to a destination state for an event.      |
+| Variable        | Changing data, such as `selectedAnswer`, kept separate from state.          |
+| Condition group | A bounded set of typed predicates combined with AND or OR.                  |
+| Action          | A generic effect: set a variable, play a named animation, or emit an event. |
 
 The engine is deliberately React-free. The UI projects it into React Flow, the preview consumes the resulting runtime state, and a future compiler can consume the same JSON. The engine does not contain quiz-specific commands such as `selectQuizAnswer`.
 

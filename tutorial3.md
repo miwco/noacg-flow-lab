@@ -121,13 +121,13 @@ Rename it `FEATURED` and describe it as:
 
 `The guest strap is emphasized on air.`
 
-Drag from the visible handle on HOLD to FEATURED.
+Press **Add transition** above the graph. Choose HOLD as the source and FEATURED as the destination in the Inspector.
 
 ### Narration
 
 "Creating a state no longer asks for hidden setup in a browser prompt. It creates a draft state and opens the exact fields that need attention.
 
-Dragging between the visible handles creates a transition and immediately opens its complete draft."
+The explicit Add transition command creates a route and immediately opens its complete draft. Dragging between visible handles remains an optional faster method once the graph is familiar."
 
 ## Scene 7 - Define what makes the route legal
 
@@ -208,7 +208,7 @@ Show the starting project:
 
 Press **State**, rename it `ON AIR`, and describe it.
 
-Connect OFF to ON AIR. Configure the new transition to use TAKE and add the animation action `graphic-in`. Save it.
+Press **Add transition**. The first route starts at OFF and targets the new ON AIR state. Configure it to use TAKE and add the animation action `graphic-in`. Save it.
 
 ### Narration
 

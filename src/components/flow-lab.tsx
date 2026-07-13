@@ -441,7 +441,57 @@ export default function FlowLab({
     }));
     setSelection({ kind: "state", id });
     setNotice(
-      "State created. Name and describe it in the Inspector, then drag from a handle to connect it.",
+      "State created and selected. Name it in the Inspector, then press Add transition above the graph.",
+    );
+  }
+  function addTransition() {
+    if (project.states.length < 2) {
+      setNotice(
+        "Add a second state before creating a transition between states.",
+      );
+      return;
+    }
+    const firstRoute = project.transitions.length === 0;
+    const from = firstRoute
+      ? project.initialStateId
+      : (state?.id ?? project.initialStateId);
+    const to =
+      (firstRoute
+        ? project.states.find((item) => item.id !== project.initialStateId)?.id
+        : project.states.find((item) => item.id !== from)?.id) ??
+      project.initialStateId;
+    const event =
+      project.events.find((item) => item.source !== "animation-complete") ??
+      project.events[0];
+    const eventId = event?.id ?? "TAKE";
+    const transitionId = `transition-${crypto.randomUUID()}`;
+    const priorities = project.transitions
+      .filter((item) => item.from === from && item.event === eventId)
+      .map((item) => item.priority);
+    setProject((current) => ({
+      ...current,
+      events: event
+        ? current.events
+        : [
+            ...current.events,
+            { id: eventId, label: "Take", source: "operator" },
+          ],
+      transitions: [
+        ...current.transitions,
+        {
+          id: transitionId,
+          from,
+          to,
+          event: eventId,
+          priority: priorities.length ? Math.max(...priorities) + 10 : 0,
+          label: "New transition",
+          actions: [],
+        },
+      ],
+    }));
+    setSelection({ kind: "transition", id: transitionId });
+    setNotice(
+      "Transition created and opened in the Inspector. Choose its source, destination, event, conditions, and actions.",
     );
   }
   function addVariable() {
@@ -668,16 +718,13 @@ export default function FlowLab({
               mode === "design" ? (
                 <div className="graph-actions">
                   <button onClick={addState}>
-                    <Plus size={14} /> State
+                    <Plus size={14} /> Add state
                   </button>
                   <button
-                    onClick={() =>
-                      setNotice(
-                        "Drag from the visible handle on one state to another. The new transition will open in the Inspector.",
-                      )
-                    }
+                    onClick={addTransition}
+                    disabled={project.states.length < 2}
                   >
-                    <Link2 size={14} /> Connect
+                    <Link2 size={14} /> Add transition
                   </button>
                 </div>
               ) : (
@@ -701,6 +748,8 @@ export default function FlowLab({
             <AuthoringGuide
               project={project}
               onSelect={setSelection}
+              onAddState={addState}
+              onAddTransition={addTransition}
               onSimulate={() => enterMode("simulate")}
             />
           )}
@@ -1049,12 +1098,17 @@ export default function FlowLab({
 function AuthoringGuide({
   project,
   onSelect,
+  onAddState,
+  onAddTransition,
   onSimulate,
 }: {
   project: FlowProject;
   onSelect: (selection: Selection) => void;
+  onAddState: () => void;
+  onAddTransition: () => void;
   onSimulate: () => void;
 }) {
+  const isBlank = project.metadata?.renderer === "generic";
   const exampleState =
     project.states.find((item) => item.id !== project.initialStateId) ??
     project.states[0];
@@ -1066,41 +1120,61 @@ function AuthoringGuide({
     <div className="author-guide">
       <div>
         <small>BUILD THIS FLOW</small>
-        <strong>Modify the working example, then test it.</strong>
+        <strong>
+          {isBlank
+            ? "Create one state, connect it, then edit the logic."
+            : "Modify the working example, then test it."}
+        </strong>
       </div>
       <button
-        onClick={() =>
-          exampleState && onSelect({ kind: "state", id: exampleState.id })
+        onClick={
+          isBlank && project.states.length === 1
+            ? onAddState
+            : () =>
+                exampleState && onSelect({ kind: "state", id: exampleState.id })
         }
       >
         <b>1</b>
         <span>
-          Edit a state<small>Stable on-air situation</small>
+          {isBlank && project.states.length === 1
+            ? "Add on-air state"
+            : "Edit a state"}
+          <small>Stable on-air situation</small>
         </span>
       </button>
       <button
-        onClick={() =>
-          exampleTransition &&
-          onSelect({ kind: "transition", id: exampleTransition.id })
+        disabled={project.states.length < 2}
+        onClick={
+          isBlank && !exampleTransition
+            ? onAddTransition
+            : () =>
+                exampleTransition &&
+                onSelect({ kind: "transition", id: exampleTransition.id })
         }
       >
         <b>2</b>
         <span>
-          Edit a transition<small>Event, rules, and actions</small>
+          {isBlank && !exampleTransition
+            ? "Add transition"
+            : "Edit a transition"}
+          <small>Connect source, event, and destination</small>
         </span>
       </button>
       <button
+        disabled={!exampleTransition}
         onClick={() =>
-          exampleVariable &&
-          onSelect({ kind: "variable", id: exampleVariable.id })
+          exampleTransition
+            ? onSelect({ kind: "transition", id: exampleTransition.id })
+            : exampleVariable &&
+              onSelect({ kind: "variable", id: exampleVariable.id })
         }
       >
         <b>3</b>
         <span>
-          Connect the data<small>Variables feed the renderer</small>
+          Edit the logic<small>Conditions and named actions</small>
         </span>
       </button>
-      <button onClick={onSimulate}>
+      <button disabled={!exampleTransition} onClick={onSimulate}>
         <b>4</b>
         <span>
           Test the result<small>Only legal actions appear</small>
