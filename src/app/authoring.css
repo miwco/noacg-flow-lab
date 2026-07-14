@@ -1,9 +1,9 @@
 .react-flow__edgelabel-renderer {
-  z-index: 5;
+  pointer-events: none;
 }
 
 .transition-edge-label {
-  z-index: 6;
+  pointer-events: auto;
 }
 
 .transition-edge-label::after {
@@ -14,6 +14,7 @@
   width: 2px;
   height: 36px;
   background: #6f8bc3;
+  pointer-events: none;
   transform: translateX(-50%);
 }
 
@@ -27,6 +28,7 @@
   height: 9px;
   border: 2px solid #bcd0ff;
   background: #182744;
+  pointer-events: none;
   transform: translateX(-50%) rotate(45deg);
 }
 
