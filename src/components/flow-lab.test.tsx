@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import FlowLab from "./flow-lab";
+import FlowLab, { createNativeTransitionEdge } from "./flow-lab";
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -58,5 +58,33 @@ describe("FlowLab transition creation", () => {
     expect(
       screen.queryByText("No transitions yet.", { exact: false }),
     ).not.toBeInTheDocument();
+    expect(
+      view.container.querySelector(".react-flow__edgelabel-renderer"),
+    ).toBeEmptyDOMElement();
+    expect(
+      view.container.querySelector(".transition-edge-label"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses a native SVG edge with a large click target and event label", () => {
+    const edge = createNativeTransitionEdge(
+      {
+        id: "take-in",
+        from: "off",
+        to: "in",
+        event: "TAKE",
+        priority: 0,
+        label: "Take in",
+        actions: [],
+      },
+      "Take",
+      true,
+      false,
+    );
+
+    expect(edge.type).toBeUndefined();
+    expect(edge.label).toBe("Take");
+    expect(edge.interactionWidth).toBe(36);
+    expect(edge.style).toMatchObject({ strokeWidth: 4 });
   });
 });

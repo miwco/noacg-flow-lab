@@ -77,7 +77,7 @@ Descriptions should explain the on-air situation, not contain changing guest dat
 
 Select the edge from OFF to IN or choose **Take in** from the Transitions list.
 
-Show that the edge contains a selectable label with its route, event, and transition name.
+Show the event label on the native connection line. Click the thicker line itself to reopen the transition Inspector. Explain that the list beneath the graph is the reliable alternate selection method.
 
 In the Inspector, point to:
 

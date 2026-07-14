@@ -3,18 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
-  BaseEdge,
   Controls,
-  EdgeLabelRenderer,
   Handle,
   MarkerType,
   MiniMap,
   Position,
   ReactFlow,
-  getBezierPath,
   type Connection,
   type Edge,
-  type EdgeProps,
   type Node,
   type NodeProps,
   type OnNodesChange,
@@ -85,14 +81,6 @@ type HistoryItem = {
   trace: TransitionTrace[];
 };
 type FlowScenario = { id: string; name: string; events: FlowEventPayload[] };
-type TransitionEdgeData = {
-  label: string;
-  event: string;
-  route: string;
-  selected: boolean;
-  onSelect: (id: string) => void;
-};
-type TransitionGraphEdge = Edge<TransitionEdgeData, "transition">;
 
 function StateNode({ data }: NodeProps<Node<StateData>>) {
   return (
@@ -111,57 +99,37 @@ function StateNode({ data }: NodeProps<Node<StateData>>) {
 }
 const nodeTypes = { state: StateNode };
 
-function TransitionEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
-  markerEnd,
-  style,
-  data,
-}: EdgeProps<TransitionGraphEdge>) {
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  });
-  return (
-    <>
-      <BaseEdge
-        id={id}
-        path={edgePath}
-        markerEnd={markerEnd}
-        style={style}
-        interactionWidth={32}
-      />
-      <EdgeLabelRenderer>
-        <button
-          className={`transition-edge-label nodrag nopan ${data?.selected ? "selected" : ""}`}
-          style={{
-            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - 58}px)`,
-          }}
-          onClick={(event) => {
-            event.stopPropagation();
-            data?.onSelect(id);
-          }}
-          aria-label={`Edit transition ${data?.route}: ${data?.event}`}
-        >
-          <small>{data?.route}</small>
-          <strong>{data?.event}</strong>
-          <span>{data?.label}</span>
-        </button>
-      </EdgeLabelRenderer>
-    </>
-  );
+export function createNativeTransitionEdge(
+  transition: FlowTransition,
+  eventLabel: string,
+  selected: boolean,
+  fired: boolean,
+): Edge {
+  return {
+    id: transition.id,
+    source: transition.from,
+    target: transition.to,
+    animated: fired,
+    markerEnd: { type: MarkerType.ArrowClosed },
+    interactionWidth: 36,
+    className: `${selected ? "flow-edge-selected" : ""} ${fired ? "flow-edge-fired" : ""}`,
+    style: { strokeWidth: selected ? 4 : 3 },
+    label: eventLabel,
+    labelStyle: {
+      fill: selected ? "#ffe0a3" : "#d7e4ff",
+      fontSize: 10,
+      fontWeight: 800,
+    },
+    labelBgStyle: {
+      fill: selected ? "#302a20" : "#10172b",
+      fillOpacity: 0.98,
+      stroke: selected ? "#f6bc56" : "#5677af",
+      strokeWidth: 1,
+    },
+    labelBgPadding: [7, 5],
+    labelBgBorderRadius: 6,
+  };
 }
-
-const edgeTypes = { transition: TransitionEdge };
 
 function referenceText(reference: ValueReference | undefined) {
   if (reference && typeof reference === "object")
@@ -218,10 +186,9 @@ export default function FlowLab({
   const [scenarios, setScenarios] = useState<FlowScenario[]>([]);
   const importRef = useRef<HTMLInputElement>(null);
   const storageReady = useRef(false);
-  const graphInstance = useRef<ReactFlowInstance<
-    Node<StateData>,
-    TransitionGraphEdge
-  > | null>(null);
+  const graphInstance = useRef<ReactFlowInstance<Node<StateData>, Edge> | null>(
+    null,
+  );
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -357,42 +324,24 @@ export default function FlowLab({
       })),
     [project.states, runtime.stateId, selection],
   );
-  const edges = useMemo<TransitionGraphEdge[]>(
+  const edges = useMemo<Edge[]>(
     () =>
       project.transitions
         .filter((item) => item.from !== "*")
         .map((item) => {
-          const from =
-            project.states.find((state) => state.id === item.from)?.label ??
-            item.from;
-          const to =
-            project.states.find((state) => state.id === item.to)?.label ??
-            item.to;
-          return {
-            id: item.id,
-            type: "transition",
-            source: item.from,
-            target: item.to,
-            animated: runtime.lastTransitionId === item.id,
-            markerEnd: { type: MarkerType.ArrowClosed },
-            className: `${selection?.kind === "transition" && selection.id === item.id ? "flow-edge-selected" : ""} ${runtime.lastTransitionId === item.id ? "flow-edge-fired" : ""}`,
-            data: {
-              label: item.label || "Edit logic",
-              event: item.event,
-              route: `${from} → ${to}`,
-              selected:
-                selection?.kind === "transition" && selection.id === item.id,
-              onSelect: selectTransition,
-            },
-          };
+          const selected =
+            selection?.kind === "transition" && selection.id === item.id;
+          const eventLabel =
+            project.events.find((event) => event.id === item.event)?.label ??
+            item.event;
+          return createNativeTransitionEdge(
+            item,
+            eventLabel,
+            selected,
+            runtime.lastTransitionId === item.id,
+          );
         }),
-    [
-      project.states,
-      project.transitions,
-      runtime.lastTransitionId,
-      selection,
-      selectTransition,
-    ],
+    [project.events, project.transitions, runtime.lastTransitionId, selection],
   );
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
@@ -906,7 +855,6 @@ export default function FlowLab({
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
-              edgeTypes={edgeTypes}
               onNodesChange={onNodesChange}
               onConnect={onConnect}
               onNodeClick={(_, node) =>
