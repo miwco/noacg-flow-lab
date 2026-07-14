@@ -1,7 +1,6 @@
 "use client";
 
 import type { RuntimeState } from "../flow/runtime";
-import type { FlowProject } from "../flow/schema";
 
 export function LowerThirdPreview({ runtime }: { runtime: RuntimeState }) {
   const visible = runtime.stateId !== "off";
@@ -26,50 +25,19 @@ export function LowerThirdPreview({ runtime }: { runtime: RuntimeState }) {
   );
 }
 
-export function GenericPreview({
-  project,
-  runtime,
-}: {
-  project: FlowProject;
-  runtime: RuntimeState;
-}) {
-  const visible = runtime.stateId !== project.initialStateId;
-  const stateLabel =
-    project.states.find((state) => state.id === runtime.stateId)?.label ??
-    runtime.stateId;
-  const variables = project.variables.map((variable) => ({
-    ...variable,
-    value: runtime.variables[variable.id],
-  }));
-  const [headline, ...supporting] = variables;
+export function GenericPreview({ runtime }: { runtime: RuntimeState }) {
   return (
     <div className="generic-preview" data-testid="generic-preview">
-      {visible ? (
-        <>
-          <small>{stateLabel} - GENERIC GRAPHIC</small>
-          <strong>
-            {headline?.value === null || headline?.value === undefined
-              ? "-"
-              : String(headline.value)}
-          </strong>
-          <div>
-            {supporting.map((variable) => (
-              <span key={variable.id}>
-                <b>{variable.label}</b>
-                {variable.value === null ? "-" : String(variable.value)}
-              </span>
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="off-air-message">
-          <span>GENERIC GRAPHIC</span>
-          <strong>OFF AIR</strong>
-          <small>
-            Take to show {headline?.label?.toLowerCase() ?? "graphic data"}
-          </small>
-        </div>
-      )}
+      <small>GENERIC RENDERER CONTRACT</small>
+      <strong>{runtime.stateId}</strong>
+      <div>
+        {Object.entries(runtime.variables).map(([id, value]) => (
+          <span key={id}>
+            <b>{id}</b>
+            {value === null ? "-" : String(value)}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

@@ -28,4 +28,3 @@
 - Teach authoring by modifying a working reference before starting from a blank Flow. The help and tutorial must show states, transitions, legality, actions, variables, and the renderer contract.
 - Graph gestures are accelerators, not prerequisites. Blank-flow authoring must be completable through explicit labeled commands without dragging or prior node-editor knowledge.
 - Transition edges and their labels must remain prominent and directly selectable. Event and variable authoring must expose the transitions that use each contract.
-- Creating a transition must be visibly distinct from editing one. A new route remains a labeled draft until the author explicitly creates or cancels it.

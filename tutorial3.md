@@ -131,13 +131,13 @@ Rename it `FEATURED` and describe it as:
 
 `The guest strap is emphasized on air.`
 
-Press **Add transition** above the graph. Point out the **New transition - not saved** heading and dashed connection. Choose HOLD under **Starts in state** and FEATURED under **Goes to state**, then press **Create transition**.
+Press **Add transition** above the graph. Choose HOLD as the source and FEATURED as the destination in the Inspector.
 
 ### Narration
 
 "Creating a state no longer asks for hidden setup in a browser prompt. It creates a draft state and opens the exact fields that need attention.
 
-The explicit Add transition command opens a clearly marked draft. Nothing is created until you press Create transition, and Cancel new transition leaves the existing Flow unchanged. Dragging between visible handles remains an optional faster method once the graph is familiar."
+The explicit Add transition command creates a route and immediately opens its complete draft. Dragging between visible handles remains an optional faster method once the graph is familiar."
 
 ## Scene 7 - Define what makes the route legal
 
@@ -164,7 +164,7 @@ Conditions are optional typed rules. Priorities make competing branches determin
 
 ### Demonstrate operator-action creation
 
-Under **Behavior contracts**, press **Operator action**. Explain that **Triggered by: Operator button** means the event can become a control, but the button is visible only when a transition uses it from the current state. For an unconnected button, press **Use in a new transition**. Select a listed route to return directly to its transition logic.
+Under **Behavior contracts**, press **Operator action**. Explain that an operator-source event declares a potential button, but the button becomes legal and visible only after a transition selects that event from the current state. Select the event's listed route to return directly to its transition logic.
 
 ## Scene 8 - Connect changing data to the renderer
 
@@ -187,7 +187,7 @@ Point to:
 
 Variables do not attach directly to states. Transition conditions may read them and Set variable actions may change them. The renderer decides which visual slots consume them.
 
-For this prototype, the reference lower-third renderer is pre-wired: the name variable feeds the name text and the role variable feeds the role text. The generic blank-flow renderer hides its output in the initial OFF state, uses the first variable as its headline in every other state, and lists later variables as supporting data. Editable state-specific visual slot binding is not implemented yet and belongs to the future design layer."
+For this prototype, the reference lower-third renderer is pre-wired: the name variable feeds the name text and the role variable feeds the role text. The generic blank-flow preview displays every variable in every state. State-specific visual slot and visibility binding is not implemented yet and belongs to the future design layer."
 
 ## Scene 9 - Verify the modification
 
@@ -224,7 +224,7 @@ Show the starting project:
 
 Press **State**, rename it `ON AIR`, and describe it.
 
-Select OFF and press **Add transition from OFF**. The dashed draft starts at OFF and targets the new ON AIR state. Configure **Operator button / event** as TAKE, add the animation action `graphic-in`, and press **Create transition**.
+Press **Add transition**. The first route starts at OFF and targets the new ON AIR state. Configure it to use TAKE and add the animation action `graphic-in`. Save it.
 
 ### Narration
 
