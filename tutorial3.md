@@ -43,13 +43,17 @@ Follow the graph from `OFF` to `IN` to `HOLD`.
 
 Select each state and show its name, stable ID, and description in the Inspector.
 
+Point to the minimap in the lower-right corner. Drag inside it to navigate the larger canvas and use its wheel interaction to change the graph zoom.
+
 ### Narration
 
 "The lower third has three stable situations.
 
 OFF means the graphic is not on air. IN means its entrance is active. HOLD means it has settled on air.
 
-The guest name and title are not states because their values can change without changing the graphic's behavioral situation. They are variables."
+The guest name and title are not states because their values can change without changing the graphic's behavioral situation. They are variables.
+
+The minimap is both an overview and a navigation control. It shows where the visible viewport sits inside a larger graph."
 
 ## Scene 3 - Modify a state
 
@@ -73,6 +77,8 @@ Descriptions should explain the on-air situation, not contain changing guest dat
 
 Select the edge from OFF to IN or choose **Take in** from the Transitions list.
 
+Show that the edge contains a selectable label with its route, event, and transition name.
+
 In the Inspector, point to:
 
 - From: OFF
@@ -86,6 +92,10 @@ In the Inspector, point to:
 "A transition answers one sentence: when this event is requested from this state, where may the graphic go, under which conditions, and what effects should run?
 
 TAKE is legal in OFF because this transition exists. After it fires, the state is IN, so the runtime offers only events that have a legal route from IN."
+
+### On-screen callout
+
+`Operator button TAKE -> transition OFF to IN -> actions -> current state IN`
 
 ## Scene 5 - Modify an action
 
@@ -152,6 +162,10 @@ If appropriate, create a new event named `FEATURE` first and return to the trans
 
 Conditions are optional typed rules. Priorities make competing branches deterministic. Actions describe what data or named animation contract runs when the route succeeds."
 
+### Demonstrate operator-action creation
+
+Under **Behavior contracts**, press **Operator action**. Explain that an operator-source event declares a potential button, but the button becomes legal and visible only after a transition selects that event from the current state. Select the event's listed route to return directly to its transition logic.
+
 ## Scene 8 - Connect changing data to the renderer
 
 ### On screen
@@ -171,7 +185,9 @@ Point to:
 
 "The renderer remains continuously mounted. Flow sends it the current state, current variable values, and named animation actions.
 
-For this prototype, the reference lower-third renderer is pre-wired: the name variable feeds the name text and the role variable feeds the role text. The future design layer will provide editable visual slot mapping. That mapping is not hidden Flow logic and does not turn Flow into a design editor."
+Variables do not attach directly to states. Transition conditions may read them and Set variable actions may change them. The renderer decides which visual slots consume them.
+
+For this prototype, the reference lower-third renderer is pre-wired: the name variable feeds the name text and the role variable feeds the role text. The generic blank-flow preview displays every variable in every state. State-specific visual slot and visibility binding is not implemented yet and belongs to the future design layer."
 
 ## Scene 9 - Verify the modification
 
@@ -278,6 +294,9 @@ Design defines how it looks. Timeline defines how it moves. Flow defines when an
 - Show that selecting transitions no longer inserts a second right-side panel
 - Demonstrate normal page scrolling over the graph
 - Demonstrate Ctrl + wheel graph zoom
+- Demonstrate dragging the minimap to navigate the canvas
+- Select a transition both from its edge label and from the Transitions list
+- Create an Operator action and show which transition route uses it
 - Confirm the preview does not flash during selection, Lock, Reveal, or lower-third Continue
 - Keep all four quiz answers visible when the quiz appears
 - Confirm the Blank flow reaches a healthy state before simulation

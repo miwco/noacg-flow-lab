@@ -18,6 +18,8 @@ The reference project is an original, broadcast-inspired quiz graphic. It implem
 - States, transitions, variables, conditions, and actions can be inspected. State names and descriptions are editable; states and variables can be added; nodes can be moved; graph handles create new connections.
 - Guided authoring starts by modifying a working reference and can continue from a deliberately minimal blank Flow.
 - Explicit Add state and Add transition commands open complete drafts in one stable Inspector. Visible handles remain an optional faster connection method.
+- Transition edges carry selectable route and event labels, while event and variable inspectors link back to every transition that uses them.
+- Operator-action creation explains that an event becomes a visible legal control only through a transition from the current state.
 - The Graphic connection panel explains the state, variable, and named-animation contract received by the continuously mounted renderer.
 - Projects persist in browser local storage and can be exported/imported as readable JSON.
 - Transition edits are staged, summarized, type-aware, and checked for impossible or duplicate routes before save.
@@ -87,6 +89,7 @@ Import this repository into Vercel, select the default Next.js preset, and deplo
 - Conditions deliberately stop at one AND/OR group and do not allow arbitrary scripts or nested expressions.
 - Actions are typed but only preview-facing animation and variable actions are demonstrated.
 - Reference renderers are still pre-wired. Editable design-layer slot binding remains future work, but the contract and current mappings are visible to authors.
+- The generic blank-flow preview displays every variable in every state; state-specific visual slot and visibility binding is not implemented yet.
 - The standalone HTML player proves portable Flow JSON execution and reference rendering, but is not a playout-system compatibility claim.
 
 ## Direction

@@ -3,14 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   Handle,
   MarkerType,
   MiniMap,
   Position,
   ReactFlow,
+  getBezierPath,
   type Connection,
   type Edge,
+  type EdgeProps,
   type Node,
   type NodeProps,
   type OnNodesChange,
@@ -81,6 +85,14 @@ type HistoryItem = {
   trace: TransitionTrace[];
 };
 type FlowScenario = { id: string; name: string; events: FlowEventPayload[] };
+type TransitionEdgeData = {
+  label: string;
+  event: string;
+  route: string;
+  selected: boolean;
+  onSelect: (id: string) => void;
+};
+type TransitionGraphEdge = Edge<TransitionEdgeData, "transition">;
 
 function StateNode({ data }: NodeProps<Node<StateData>>) {
   return (
@@ -98,6 +110,58 @@ function StateNode({ data }: NodeProps<Node<StateData>>) {
   );
 }
 const nodeTypes = { state: StateNode };
+
+function TransitionEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  style,
+  data,
+}: EdgeProps<TransitionGraphEdge>) {
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        markerEnd={markerEnd}
+        style={style}
+        interactionWidth={32}
+      />
+      <EdgeLabelRenderer>
+        <button
+          className={`transition-edge-label nodrag nopan ${data?.selected ? "selected" : ""}`}
+          style={{
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - 58}px)`,
+          }}
+          onClick={(event) => {
+            event.stopPropagation();
+            data?.onSelect(id);
+          }}
+          aria-label={`Edit transition ${data?.route}: ${data?.event}`}
+        >
+          <small>{data?.route}</small>
+          <strong>{data?.event}</strong>
+          <span>{data?.label}</span>
+        </button>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const edgeTypes = { transition: TransitionEdge };
 
 function referenceText(reference: ValueReference | undefined) {
   if (reference && typeof reference === "object")
@@ -152,9 +216,10 @@ export default function FlowLab({
   const [scenarios, setScenarios] = useState<FlowScenario[]>([]);
   const importRef = useRef<HTMLInputElement>(null);
   const storageReady = useRef(false);
-  const graphInstance = useRef<ReactFlowInstance<Node<StateData>, Edge> | null>(
-    null,
-  );
+  const graphInstance = useRef<ReactFlowInstance<
+    Node<StateData>,
+    TransitionGraphEdge
+  > | null>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -209,6 +274,18 @@ export default function FlowLab({
   const stateName =
     project.states.find((item) => item.id === runtime.stateId)?.label ||
     runtime.stateId;
+  const startingTemplate =
+    project.metadata?.reference === "lower-third"
+      ? lowerThirdProject
+      : project.metadata?.reference === "quiz"
+        ? quizProject
+        : blankProject;
+  const startingTemplateLabel =
+    project.metadata?.reference === "lower-third"
+      ? "lower third"
+      : project.metadata?.reference === "quiz"
+        ? "quiz reference"
+        : "blank flow";
   const selectedHistoryItem =
     selectedHistory === null ? history.at(-1) : history[selectedHistory];
   const lastTrace = selectedHistoryItem?.trace.at(-1);
@@ -253,6 +330,10 @@ export default function FlowLab({
     },
     [project, runtime],
   );
+  const selectTransition = useCallback(
+    (id: string) => setSelection({ kind: "transition", id }),
+    [],
+  );
 
   const nodes = useMemo<Node<StateData>[]>(
     () =>
@@ -271,22 +352,42 @@ export default function FlowLab({
       })),
     [project.states, runtime.stateId, selection],
   );
-  const edges = useMemo<Edge[]>(
+  const edges = useMemo<TransitionGraphEdge[]>(
     () =>
       project.transitions
         .filter((item) => item.from !== "*")
-        .map((item) => ({
-          id: item.id,
-          source: item.from,
-          target: item.to,
-          label: `${item.priority}: ${item.label ?? item.event}`,
-          animated: runtime.lastTransitionId === item.id,
-          markerEnd: { type: MarkerType.ArrowClosed },
-          className: `${selection?.kind === "transition" && selection.id === item.id ? "flow-edge-selected" : ""} ${runtime.lastTransitionId === item.id ? "flow-edge-fired" : ""}`,
-          labelStyle: { fill: "#c3d1ff", fontSize: 10, fontWeight: 700 },
-          labelBgStyle: { fill: "#10172b", fillOpacity: 0.94 },
-        })),
-    [project.transitions, runtime.lastTransitionId, selection],
+        .map((item) => {
+          const from =
+            project.states.find((state) => state.id === item.from)?.label ??
+            item.from;
+          const to =
+            project.states.find((state) => state.id === item.to)?.label ??
+            item.to;
+          return {
+            id: item.id,
+            type: "transition",
+            source: item.from,
+            target: item.to,
+            animated: runtime.lastTransitionId === item.id,
+            markerEnd: { type: MarkerType.ArrowClosed },
+            className: `${selection?.kind === "transition" && selection.id === item.id ? "flow-edge-selected" : ""} ${runtime.lastTransitionId === item.id ? "flow-edge-fired" : ""}`,
+            data: {
+              label: item.label || "Edit logic",
+              event: item.event,
+              route: `${from} → ${to}`,
+              selected:
+                selection?.kind === "transition" && selection.id === item.id,
+              onSelect: selectTransition,
+            },
+          };
+        }),
+    [
+      project.states,
+      project.transitions,
+      runtime.lastTransitionId,
+      selection,
+      selectTransition,
+    ],
   );
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
@@ -427,6 +528,25 @@ export default function FlowLab({
   }
   function addState() {
     const id = `state-${crypto.randomUUID()}`;
+    const anchor =
+      state ??
+      (transition
+        ? project.states.find((item) => item.id === transition.to)
+        : undefined) ??
+      project.states.find((item) => item.id === project.initialStateId) ??
+      project.states[0];
+    const position = {
+      x: (anchor?.position.x ?? 0) + 220,
+      y: anchor?.position.y ?? 170,
+    };
+    while (
+      project.states.some(
+        (item) =>
+          Math.abs(item.position.x - position.x) < 170 &&
+          Math.abs(item.position.y - position.y) < 90,
+      )
+    )
+      position.y += 110;
     setProject((current) => ({
       ...current,
       states: [
@@ -435,11 +555,19 @@ export default function FlowLab({
           id,
           label: "NEW STATE",
           description: "Describe the stable on-air situation.",
-          position: { x: 340, y: 430 },
+          position,
         },
       ],
     }));
     setSelection({ kind: "state", id });
+    window.setTimeout(
+      () =>
+        graphInstance.current?.setCenter(position.x + 74, position.y + 38, {
+          zoom: 1,
+          duration: 300,
+        }),
+      0,
+    );
     setNotice(
       "State created and selected. Name it in the Inspector, then press Add transition above the graph.",
     );
@@ -515,6 +643,9 @@ export default function FlowLab({
       ],
     }));
     setSelection({ kind: "event", id });
+    setNotice(
+      "Operator action created. Name it here, then add or select a transition and choose this event in its Event field.",
+    );
   }
 
   return (
@@ -758,14 +889,13 @@ export default function FlowLab({
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
               onNodesChange={onNodesChange}
               onConnect={onConnect}
               onNodeClick={(_, node) =>
                 setSelection({ kind: "state", id: node.id })
               }
-              onEdgeClick={(_, edge) =>
-                setSelection({ kind: "transition", id: edge.id })
-              }
+              onEdgeClick={(_, edge) => selectTransition(edge.id)}
               onInit={(instance) => {
                 graphInstance.current = instance;
                 window.setTimeout(() => instance.fitView({ padding: 0.12 }), 0);
@@ -784,12 +914,17 @@ export default function FlowLab({
                   node.id === runtime.stateId ? "#79a6ff" : "#26385d"
                 }
                 maskColor="rgba(8,12,25,.7)"
+                pannable
+                zoomable
               />
               <Controls showInteractive={false} />
             </ReactFlow>
           </div>
           <div className="graph-transition-strip">
-            <span>TRANSITIONS</span>
+            <span>TRANSITIONS - SELECT TO EDIT</span>
+            {project.transitions.length === 0 && (
+              <p>No transitions yet. Use Add transition above the graph.</p>
+            )}
             {[...project.transitions]
               .sort(
                 (a, b) =>
@@ -805,7 +940,15 @@ export default function FlowLab({
                     setSelection({ kind: "transition", id: item.id })
                   }
                 >
-                  {item.priority} · {item.label || item.event}
+                  <small>
+                    {project.states.find((state) => state.id === item.from)
+                      ?.label ?? "ANY"}{" "}
+                    {" → "}
+                    {project.states.find((state) => state.id === item.to)
+                      ?.label ?? item.to}
+                  </small>
+                  <strong>{item.event}</strong>
+                  <span>{item.label || "Edit logic"}</span>
                 </button>
               ))}
           </div>
@@ -816,8 +959,9 @@ export default function FlowLab({
             <span>
               <i className="dot fired" /> Last transition
             </span>
-            <span>Drag a handle to connect</span>
+            <span>Click a transition label to edit logic</span>
             <span>Ctrl + wheel to zoom</span>
+            <span>Minimap: drag to navigate, wheel to zoom</span>
             <span>Mode: {mode}</span>
           </div>
         </section>
@@ -1007,35 +1151,49 @@ export default function FlowLab({
                 </div>
               )}
               {mode === "design" && selectedEvent && (
-                <EventContractEditor
-                  event={selectedEvent}
-                  onChange={(next) =>
-                    setProject((current) => ({
-                      ...current,
-                      events: current.events.map((item) =>
-                        item.id === selectedEvent.id ? next : item,
-                      ),
-                      transitions: current.transitions.map((item) =>
-                        item.event === selectedEvent.id
-                          ? { ...item, event: next.id }
-                          : item,
-                      ),
-                    }))
-                  }
-                />
+                <>
+                  <EventRelationship
+                    event={selectedEvent}
+                    project={project}
+                    onSelectTransition={selectTransition}
+                  />
+                  <EventContractEditor
+                    event={selectedEvent}
+                    onChange={(next) =>
+                      setProject((current) => ({
+                        ...current,
+                        events: current.events.map((item) =>
+                          item.id === selectedEvent.id ? next : item,
+                        ),
+                        transitions: current.transitions.map((item) =>
+                          item.event === selectedEvent.id
+                            ? { ...item, event: next.id }
+                            : item,
+                        ),
+                      }))
+                    }
+                  />
+                </>
               )}
               {mode === "design" && selectedVariable && (
-                <VariableContractEditor
-                  variable={selectedVariable}
-                  onChange={(next) =>
-                    setProject((current) => ({
-                      ...current,
-                      variables: current.variables.map((item) =>
-                        item.id === selectedVariable.id ? next : item,
-                      ),
-                    }))
-                  }
-                />
+                <>
+                  <VariableRelationship
+                    variable={selectedVariable}
+                    project={project}
+                    onSelectTransition={selectTransition}
+                  />
+                  <VariableContractEditor
+                    variable={selectedVariable}
+                    onChange={(next) =>
+                      setProject((current) => ({
+                        ...current,
+                        variables: current.variables.map((item) =>
+                          item.id === selectedVariable.id ? next : item,
+                        ),
+                      }))
+                    }
+                  />
+                </>
               )}
               {mode === "simulate" && (
                 <SimulationTimeline
@@ -1082,10 +1240,13 @@ export default function FlowLab({
               <button
                 className="text-action"
                 onClick={() =>
-                  loadProject(quizProject, "Quiz reference restored.")
+                  loadProject(
+                    startingTemplate,
+                    `${startingTemplateLabel[0].toUpperCase()}${startingTemplateLabel.slice(1)} restored.`,
+                  )
                 }
               >
-                <RotateCcw size={14} /> Restore quiz reference
+                <RotateCcw size={14} /> Restore {startingTemplateLabel}
               </button>
             )}
           </section>
@@ -1212,6 +1373,153 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
+function transitionRoute(project: FlowProject, transition: FlowTransition) {
+  const from =
+    transition.from === "*"
+      ? "ANY STATE"
+      : (project.states.find((state) => state.id === transition.from)?.label ??
+        transition.from);
+  const to =
+    project.states.find((state) => state.id === transition.to)?.label ??
+    transition.to;
+  return `${from} → ${to}`;
+}
+
+function EventRelationship({
+  event,
+  project,
+  onSelectTransition,
+}: {
+  event: FlowProject["events"][number];
+  project: FlowProject;
+  onSelectTransition: (id: string) => void;
+}) {
+  const routes = project.transitions.filter((item) => item.event === event.id);
+  return (
+    <div className="contract-relationship">
+      <small>HOW THIS CONNECTS</small>
+      <strong>
+        {event.source === "operator" || !event.source
+          ? `Operator button: ${event.label}`
+          : `Trigger: ${event.label}`}
+      </strong>
+      <p>
+        When {event.id} is triggered, Flow looks for a matching transition from
+        the current state. The winning transition checks its conditions, moves
+        to its destination state, and runs its actions.
+      </p>
+      <div className="relationship-flow">
+        <span>{event.label}</span>
+        <i>→</i>
+        <b>
+          {routes.length
+            ? `${routes.length} legal route${routes.length === 1 ? "" : "s"}`
+            : "No transition yet"}
+        </b>
+      </div>
+      {routes.map((route) => (
+        <button key={route.id} onClick={() => onSelectTransition(route.id)}>
+          <span>{transitionRoute(project, route)}</span>
+          <strong>{route.label || route.event}</strong>
+          <small>Edit transition logic</small>
+        </button>
+      ))}
+      {!routes.length && (
+        <p className="relationship-warning">
+          This event cannot appear as a legal operator action until a transition
+          selects it in the Event field.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function referenceUsesVariable(
+  reference: ValueReference | undefined,
+  variableId: string,
+) {
+  return Boolean(
+    reference &&
+    typeof reference === "object" &&
+    "variable" in reference &&
+    reference.variable === variableId,
+  );
+}
+
+function transitionUsesVariable(
+  transition: FlowTransition,
+  variableId: string,
+) {
+  const conditionUse = transition.condition?.predicates.some(
+    (predicate) =>
+      referenceUsesVariable(predicate.left, variableId) ||
+      referenceUsesVariable(predicate.right, variableId),
+  );
+  const actionUse = transition.actions.some((action) => {
+    if (action.type === "set-variable")
+      return (
+        action.variable === variableId ||
+        referenceUsesVariable(action.value, variableId)
+      );
+    if (action.type === "emit")
+      return Object.values(action.data ?? {}).some((value) =>
+        referenceUsesVariable(value, variableId),
+      );
+    return false;
+  });
+  return conditionUse || actionUse;
+}
+
+function VariableRelationship({
+  variable,
+  project,
+  onSelectTransition,
+}: {
+  variable: FlowVariable;
+  project: FlowProject;
+  onSelectTransition: (id: string) => void;
+}) {
+  const routes = project.transitions.filter((transition) =>
+    transitionUsesVariable(transition, variable.id),
+  );
+  return (
+    <div className="contract-relationship">
+      <small>HOW THIS CONNECTS</small>
+      <strong>Changing data: {variable.label}</strong>
+      <p>
+        Variables do not connect directly to states. A renderer reads their
+        current values, while transition conditions may inspect them and Set
+        variable actions may change them.
+      </p>
+      <div className="relationship-flow">
+        <span>{variable.id}</span>
+        <i>→</i>
+        <b>Renderer data</b>
+      </div>
+      {routes.map((route) => (
+        <button key={route.id} onClick={() => onSelectTransition(route.id)}>
+          <span>{transitionRoute(project, route)}</span>
+          <strong>{route.label || route.event}</strong>
+          <small>Uses this variable</small>
+        </button>
+      ))}
+      {!routes.length && (
+        <p className="relationship-warning">
+          No transition reads or changes this variable yet. Add a condition or
+          Set variable action in a transition to use it in Flow logic.
+        </p>
+      )}
+      {project.metadata?.renderer === "generic" && (
+        <p className="relationship-limit">
+          The generic preview currently displays every variable in every state.
+          State-specific visual slots and visibility rules are not yet editable
+          in this prototype.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function DataContractsPanel({
   project,
   selection,
@@ -1227,12 +1535,18 @@ function DataContractsPanel({
 }) {
   return (
     <section className="panel contracts-panel">
-      <Title eyebrow="Data contracts" title="Events and variables" />
+      <Title eyebrow="Behavior contracts" title="Operator actions and data" />
+      <p className="contracts-intro">
+        An operator action declares a button or trigger. A transition decides
+        where that event is legal and what happens when it fires. To create In,
+        Next, Out, or Reset buttons, add and name each action here, then select
+        it in the Event field of the appropriate transition.
+      </p>
       <div className="contract-group">
         <div>
-          <small>EVENTS</small>
+          <small>EVENTS / OPERATOR BUTTONS</small>
           <button onClick={onAddEvent}>
-            <Plus size={12} /> Event
+            <Plus size={12} /> Operator action
           </button>
         </div>
         {project.events.map((event) => (
@@ -1249,7 +1563,11 @@ function DataContractsPanel({
               {event.label}
               <small>{event.id}</small>
             </span>
-            <b>{event.payload?.length ?? 0} fields</b>
+            <b>
+              {project.transitions.filter((item) => item.event === event.id)
+                .length || "No"}{" "}
+              routes
+            </b>
           </button>
         ))}
       </div>
@@ -1346,9 +1664,9 @@ function GraphicContractPanel({
         </div>
       </div>
       <p className="graphic-contract-note">
-        This reference renderer is pre-wired. Editable visual slot mapping
-        belongs to the next design-layer integration, while the Flow contract
-        remains platform-neutral.
+        {renderer === "generic"
+          ? "The generic preview shows every variable in every state. Choosing which visual text slot appears in each state is not yet authorable here; that requires the future design-layer binding UI."
+          : "This reference renderer is pre-wired. Editable visual slot mapping belongs to the next design-layer integration, while the Flow contract remains platform-neutral."}
       </p>
     </section>
   );
@@ -2014,6 +2332,13 @@ function TransitionEditor({
       item.id === draft.id ? draft : item,
     ),
   }).filter((item) => item.level === "error" && item.transitionId === draft.id);
+  const sourceLabel =
+    draft.from === "*"
+      ? "Any state"
+      : (project.states.find((state) => state.id === draft.from)?.label ??
+        draft.from);
+  const destinationLabel =
+    project.states.find((state) => state.id === draft.to)?.label ?? draft.to;
   return (
     <section className="panel transition-editor">
       <Title
@@ -2026,13 +2351,37 @@ function TransitionEditor({
         }
       />
       <div className="transition-form">
-        <div className="transition-summary">
-          <small>WHEN</small>
-          <strong>{draft.event}</strong>
+        <div className="selection-explainer">
+          <strong>This is where the behavior lives</strong>
           <span>
-            Branch {draft.priority} moves <b>{draft.from}</b> to{" "}
-            <b>{draft.to}</b> when{" "}
-            {conditionText(draft.condition).toLowerCase()}.
+            Choose the triggering event, the legal source state, the destination
+            state, optional conditions, and the actions that run.
+          </span>
+        </div>
+        <div className="transition-summary">
+          <div className="logic-chain">
+            <span>
+              <small>BUTTON / EVENT</small>
+              <b>
+                {project.events.find((item) => item.id === draft.event)
+                  ?.label ?? draft.event}
+              </b>
+            </span>
+            <i>→</i>
+            <span>
+              <small>LEGAL FROM</small>
+              <b>{sourceLabel}</b>
+            </span>
+            <i>→</i>
+            <span>
+              <small>GO TO</small>
+              <b>{destinationLabel}</b>
+            </span>
+          </div>
+          <span>
+            Priority {draft.priority}. {conditionText(draft.condition)}. Then
+            run {draft.actions.length}{" "}
+            {draft.actions.length === 1 ? "action" : "actions"}.
           </span>
         </div>
         <label>

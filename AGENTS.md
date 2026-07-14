@@ -27,3 +27,4 @@
 - Normal wheel input over the graph must scroll the page. Require Ctrl plus wheel for graph zoom and keep this interaction explained in the UI.
 - Teach authoring by modifying a working reference before starting from a blank Flow. The help and tutorial must show states, transitions, legality, actions, variables, and the renderer contract.
 - Graph gestures are accelerators, not prerequisites. Blank-flow authoring must be completable through explicit labeled commands without dragging or prior node-editor knowledge.
+- Transition edges and their labels must remain prominent and directly selectable. Event and variable authoring must expose the transitions that use each contract.
