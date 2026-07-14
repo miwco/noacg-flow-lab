@@ -207,6 +207,8 @@ export default function FlowLab({
     kind: "state",
     id: "off",
   });
+  const [pendingTransition, setPendingTransition] =
+    useState<FlowTransition | null>(null);
   const [tab, setTab] = useState<Tab>("preview");
   const [mode, setMode] = useState<WorkspaceMode>("design");
   const [guidedMode, setGuidedMode] = useState(true);
@@ -261,7 +263,9 @@ export default function FlowLab({
       : undefined;
   const transition =
     selection?.kind === "transition"
-      ? project.transitions.find((item) => item.id === selection.id)
+      ? pendingTransition?.id === selection.id
+        ? pendingTransition
+        : project.transitions.find((item) => item.id === selection.id)
       : undefined;
   const selectedEvent =
     selection?.kind === "event"
@@ -300,6 +304,7 @@ export default function FlowLab({
       savedScenarios = [];
     }
     setProject(next);
+    setPendingTransition(null);
     setRuntime(createRuntime(next));
     setSelection({ kind: "state", id: next.initialStateId });
     setHistory([]);
@@ -413,48 +418,54 @@ export default function FlowLab({
     (connection: Connection) => {
       if (mode === "simulate" || !connection.source || !connection.target)
         return;
+      if (pendingTransition) {
+        setSelection({ kind: "transition", id: pendingTransition.id });
+        setNotice(
+          "Finish or cancel the open new transition before adding another.",
+        );
+        return;
+      }
       const transitionId = `transition-${crypto.randomUUID()}`;
-      setProject((current) => {
-        const event =
-          current.events.find((item) => item.source !== "animation-complete") ??
-          current.events[0];
-        const eventId = event?.id ?? "TAKE";
-        const priorities = current.transitions
-          .filter(
-            (item) => item.from === connection.source && item.event === eventId,
-          )
-          .map((item) => item.priority);
-        return {
+      const event =
+        project.events.find((item) => item.source !== "animation-complete") ??
+        project.events[0];
+      const eventId = event?.id ?? "TAKE";
+      const priorities = project.transitions
+        .filter(
+          (item) => item.from === connection.source && item.event === eventId,
+        )
+        .map((item) => item.priority);
+      if (!event)
+        setProject((current) => ({
           ...current,
-          events: event
-            ? current.events
-            : [
-                ...current.events,
-                { id: eventId, label: "Take", source: "operator" },
-              ],
-          transitions: [
-            ...current.transitions,
-            {
-              id: transitionId,
-              from: connection.source!,
-              to: connection.target!,
-              event: eventId,
-              priority: priorities.length ? Math.max(...priorities) + 10 : 0,
-              label: "New transition",
-              actions: [],
-            },
+          events: [
+            ...current.events,
+            { id: eventId, label: "Take", source: "operator" },
           ],
-        };
+        }));
+      setPendingTransition({
+        id: transitionId,
+        from: connection.source,
+        to: connection.target,
+        event: eventId,
+        priority: priorities.length ? Math.max(...priorities) + 10 : 0,
+        label: "New transition",
+        actions: [],
       });
       setSelection({ kind: "transition", id: transitionId });
       setNotice(
-        "Connection created. Choose its event, conditions, and actions in the Inspector.",
+        "New transition opened. Configure it, then press Create transition.",
       );
     },
-    [mode],
+    [mode, pendingTransition, project],
   );
 
   function enterMode(next: WorkspaceMode) {
+    if (next === "simulate" && pendingTransition) {
+      setSelection({ kind: "transition", id: pendingTransition.id });
+      setNotice("Create or cancel the new transition before testing the Flow.");
+      return;
+    }
     if (next === "simulate" && hasErrors) {
       setNotice("Fix Flow health errors before simulation.");
       return;
@@ -579,6 +590,13 @@ export default function FlowLab({
       );
       return;
     }
+    if (pendingTransition) {
+      setSelection({ kind: "transition", id: pendingTransition.id });
+      setNotice(
+        "Finish or cancel the open new transition before adding another.",
+      );
+      return;
+    }
     const firstRoute = project.transitions.length === 0;
     const from = firstRoute
       ? project.initialStateId
@@ -596,30 +614,26 @@ export default function FlowLab({
     const priorities = project.transitions
       .filter((item) => item.from === from && item.event === eventId)
       .map((item) => item.priority);
-    setProject((current) => ({
-      ...current,
-      events: event
-        ? current.events
-        : [
-            ...current.events,
-            { id: eventId, label: "Take", source: "operator" },
-          ],
-      transitions: [
-        ...current.transitions,
-        {
-          id: transitionId,
-          from,
-          to,
-          event: eventId,
-          priority: priorities.length ? Math.max(...priorities) + 10 : 0,
-          label: "New transition",
-          actions: [],
-        },
-      ],
-    }));
+    if (!event)
+      setProject((current) => ({
+        ...current,
+        events: [
+          ...current.events,
+          { id: eventId, label: "Take", source: "operator" },
+        ],
+      }));
+    setPendingTransition({
+      id: transitionId,
+      from,
+      to,
+      event: eventId,
+      priority: priorities.length ? Math.max(...priorities) + 10 : 0,
+      label: "New transition",
+      actions: [],
+    });
     setSelection({ kind: "transition", id: transitionId });
     setNotice(
-      "Transition created and opened in the Inspector. Choose its source, destination, event, conditions, and actions.",
+      "New transition opened. Configure it, then press Create transition.",
     );
   }
   function addVariable() {
@@ -855,7 +869,10 @@ export default function FlowLab({
                     onClick={addTransition}
                     disabled={project.states.length < 2}
                   >
-                    <Link2 size={14} /> Add transition
+                    <Link2 size={14} />
+                    {pendingTransition
+                      ? "Finish new transition"
+                      : "Add transition"}
                   </button>
                 </div>
               ) : (
@@ -1110,22 +1127,45 @@ export default function FlowLab({
                   key={transition.id}
                   transition={transition}
                   project={project}
-                  onSave={(next) =>
+                  isNew={pendingTransition?.id === transition.id}
+                  onDraftChange={setPendingTransition}
+                  onSave={(next) => {
+                    const isNew = pendingTransition?.id === next.id;
                     setProject((current) => ({
                       ...current,
-                      transitions: current.transitions.map((item) =>
-                        item.id === next.id ? next : item,
-                      ),
-                    }))
-                  }
-                  onDelete={() => {
-                    setProject((current) => ({
-                      ...current,
-                      transitions: current.transitions.filter(
-                        (item) => item.id !== transition.id,
-                      ),
+                      transitions: isNew
+                        ? [...current.transitions, next]
+                        : current.transitions.map((item) =>
+                            item.id === next.id ? next : item,
+                          ),
                     }));
-                    setSelection(null);
+                    if (isNew) setPendingTransition(null);
+                    setNotice(
+                      isNew
+                        ? "Transition created."
+                        : "Transition changes saved.",
+                    );
+                  }}
+                  onDelete={() => {
+                    if (pendingTransition?.id === transition.id) {
+                      setPendingTransition(null);
+                      setSelection({
+                        kind: "state",
+                        id:
+                          transition.from === "*"
+                            ? project.initialStateId
+                            : transition.from,
+                      });
+                      setNotice("New transition canceled.");
+                    } else {
+                      setProject((current) => ({
+                        ...current,
+                        transitions: current.transitions.filter(
+                          (item) => item.id !== transition.id,
+                        ),
+                      }));
+                      setSelection(null);
+                    }
                   }}
                 />
               )}
@@ -1303,22 +1343,11 @@ function AuthoringGuide({
           <small>Stable on-air situation</small>
         </span>
       </button>
-      <button
-        disabled={project.states.length < 2}
-        onClick={
-          isBlank && !exampleTransition
-            ? onAddTransition
-            : () =>
-                exampleTransition &&
-                onSelect({ kind: "transition", id: exampleTransition.id })
-        }
-      >
+      <button disabled={project.states.length < 2} onClick={onAddTransition}>
         <b>2</b>
         <span>
-          {isBlank && !exampleTransition
-            ? "Add transition"
-            : "Edit a transition"}
-          <small>Connect source, event, and destination</small>
+          {exampleTransition ? "Add another transition" : "Add transition"}
+          <small>Create a new connection between states</small>
         </span>
       </button>
       <button
@@ -2316,21 +2345,31 @@ function TracePanel({
 function TransitionEditor({
   transition,
   project,
+  isNew,
+  onDraftChange,
   onSave,
   onDelete,
 }: {
   transition: FlowTransition;
   project: FlowProject;
+  isNew: boolean;
+  onDraftChange: (transition: FlowTransition) => void;
   onSave: (transition: FlowTransition) => void;
   onDelete: () => void;
 }) {
   const [draft, setDraft] = useState(transition);
+  const updateDraft = (next: FlowTransition) => {
+    setDraft(next);
+    if (isNew) onDraftChange(next);
+  };
   const dirty = JSON.stringify(draft) !== JSON.stringify(transition);
   const errors = validateProject({
     ...project,
-    transitions: project.transitions.map((item) =>
-      item.id === draft.id ? draft : item,
-    ),
+    transitions: isNew
+      ? [...project.transitions, draft]
+      : project.transitions.map((item) =>
+          item.id === draft.id ? draft : item,
+        ),
   }).filter((item) => item.level === "error" && item.transitionId === draft.id);
   const sourceLabel =
     draft.from === "*"
@@ -2342,11 +2381,11 @@ function TransitionEditor({
   return (
     <section className="panel transition-editor">
       <Title
-        eyebrow="Edit transition"
+        eyebrow={isNew ? "New transition - not created" : "Edit transition"}
         title={draft.label || draft.event}
         right={
           <span className={`draft-status ${dirty ? "dirty" : ""}`}>
-            {dirty ? "Unsaved changes" : "Saved"}
+            {isNew ? "Creating new" : dirty ? "Unsaved changes" : "Saved"}
           </span>
         }
       />
@@ -2389,7 +2428,7 @@ function TransitionEditor({
           <input
             value={draft.label || ""}
             onChange={(event) =>
-              setDraft({ ...draft, label: event.target.value })
+              updateDraft({ ...draft, label: event.target.value })
             }
           />
         </label>
@@ -2398,7 +2437,7 @@ function TransitionEditor({
           <select
             value={draft.from}
             onChange={(event) =>
-              setDraft({ ...draft, from: event.target.value })
+              updateDraft({ ...draft, from: event.target.value })
             }
           >
             <option value="*">Any state</option>
@@ -2413,7 +2452,9 @@ function TransitionEditor({
           To
           <select
             value={draft.to}
-            onChange={(event) => setDraft({ ...draft, to: event.target.value })}
+            onChange={(event) =>
+              updateDraft({ ...draft, to: event.target.value })
+            }
           >
             {project.states.map((state) => (
               <option key={state.id} value={state.id}>
@@ -2427,7 +2468,7 @@ function TransitionEditor({
           <select
             value={draft.event}
             onChange={(event) =>
-              setDraft({ ...draft, event: event.target.value })
+              updateDraft({ ...draft, event: event.target.value })
             }
           >
             {project.events.map((item) => (
@@ -2445,7 +2486,10 @@ function TransitionEditor({
             step="10"
             value={draft.priority}
             onChange={(event) =>
-              setDraft({ ...draft, priority: Number(event.target.value) })
+              updateDraft({
+                ...draft,
+                priority: Number(event.target.value),
+              })
             }
           />
         </label>
@@ -2453,12 +2497,12 @@ function TransitionEditor({
           condition={draft.condition}
           project={project}
           eventId={draft.event}
-          onChange={(condition) => setDraft({ ...draft, condition })}
+          onChange={(condition) => updateDraft({ ...draft, condition })}
         />
         <ActionEditor
           actions={draft.actions}
           project={project}
-          onChange={(actions) => setDraft({ ...draft, actions })}
+          onChange={(actions) => updateDraft({ ...draft, actions })}
         />
         {errors.map((error, index) => (
           <div className="edit-error" key={index}>
@@ -2469,17 +2513,19 @@ function TransitionEditor({
         <div className="edit-actions">
           <button
             className="save-transition"
-            disabled={!dirty || errors.length > 0}
+            disabled={(!isNew && !dirty) || errors.length > 0}
             onClick={() => onSave(draft)}
           >
-            Save transition
+            {isNew ? "Create transition" : "Save transition"}
           </button>
-          <button disabled={!dirty} onClick={() => setDraft(transition)}>
-            Discard
-          </button>
+          {!isNew && (
+            <button disabled={!dirty} onClick={() => updateDraft(transition)}>
+              Discard changes
+            </button>
+          )}
         </div>
         <button className="delete-transition" onClick={onDelete}>
-          Delete transition
+          {isNew ? "Cancel new transition" : "Delete transition"}
         </button>
       </div>
     </section>

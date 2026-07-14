@@ -131,13 +131,13 @@ Rename it `FEATURED` and describe it as:
 
 `The guest strap is emphasized on air.`
 
-Press **Add transition** above the graph. Choose HOLD as the source and FEATURED as the destination in the Inspector.
+Press **Add transition** above the graph. Point out the **New transition - not created** heading. Choose HOLD as the source and FEATURED as the destination, then press **Create transition**.
 
 ### Narration
 
 "Creating a state no longer asks for hidden setup in a browser prompt. It creates a draft state and opens the exact fields that need attention.
 
-The explicit Add transition command creates a route and immediately opens its complete draft. Dragging between visible handles remains an optional faster method once the graph is familiar."
+The explicit Add transition command opens a clearly marked draft. The route does not become part of the project until you press Create transition. Cancel new transition leaves the existing Flow unchanged. Dragging between visible handles remains an optional faster method once the graph is familiar."
 
 ## Scene 7 - Define what makes the route legal
 
