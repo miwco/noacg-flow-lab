@@ -229,7 +229,7 @@ function InstancePreview({
       ) : definition.specialized === "quiz" ? (
         <QuizPreview runtime={snapshot} />
       ) : (
-        <GenericPreview runtime={snapshot} />
+        <GenericPreview project={definition.project} runtime={snapshot} />
       )}
     </div>
   );

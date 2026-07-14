@@ -90,6 +90,7 @@ type TransitionEdgeData = {
   event: string;
   route: string;
   selected: boolean;
+  draft: boolean;
   onSelect: (id: string) => void;
 };
 type TransitionGraphEdge = Edge<TransitionEdgeData, "transition">;
@@ -142,9 +143,9 @@ function TransitionEdge({
       />
       <EdgeLabelRenderer>
         <button
-          className={`transition-edge-label nodrag nopan ${data?.selected ? "selected" : ""}`}
+          className={`transition-edge-label nodrag nopan ${data?.selected ? "selected" : ""} ${data?.draft ? "draft" : ""}`}
           style={{
-            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - 58}px)`,
+            transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY - 48}px)`,
           }}
           onClick={(event) => {
             event.stopPropagation();
@@ -152,7 +153,7 @@ function TransitionEdge({
           }}
           aria-label={`Edit transition ${data?.route}: ${data?.event}`}
         >
-          <small>{data?.route}</small>
+          <small>{data?.draft ? "NEW - NOT SAVED" : data?.route}</small>
           <strong>{data?.event}</strong>
           <span>{data?.label}</span>
         </button>
@@ -207,6 +208,8 @@ export default function FlowLab({
     kind: "state",
     id: "off",
   });
+  const [pendingTransition, setPendingTransition] =
+    useState<FlowTransition | null>(null);
   const [tab, setTab] = useState<Tab>("preview");
   const [mode, setMode] = useState<WorkspaceMode>("design");
   const [guidedMode, setGuidedMode] = useState(true);
@@ -261,7 +264,9 @@ export default function FlowLab({
       : undefined;
   const transition =
     selection?.kind === "transition"
-      ? project.transitions.find((item) => item.id === selection.id)
+      ? pendingTransition?.id === selection.id
+        ? pendingTransition
+        : project.transitions.find((item) => item.id === selection.id)
       : undefined;
   const selectedEvent =
     selection?.kind === "event"
@@ -300,6 +305,7 @@ export default function FlowLab({
       savedScenarios = [];
     }
     setProject(next);
+    setPendingTransition(null);
     setRuntime(createRuntime(next));
     setSelection({ kind: "state", id: next.initialStateId });
     setHistory([]);
@@ -352,9 +358,16 @@ export default function FlowLab({
       })),
     [project.states, runtime.stateId, selection],
   );
+  const visibleTransitions = useMemo(
+    () =>
+      pendingTransition
+        ? [...project.transitions, pendingTransition]
+        : project.transitions,
+    [pendingTransition, project.transitions],
+  );
   const edges = useMemo<TransitionGraphEdge[]>(
     () =>
-      project.transitions
+      visibleTransitions
         .filter((item) => item.from !== "*")
         .map((item) => {
           const from =
@@ -370,20 +383,22 @@ export default function FlowLab({
             target: item.to,
             animated: runtime.lastTransitionId === item.id,
             markerEnd: { type: MarkerType.ArrowClosed },
-            className: `${selection?.kind === "transition" && selection.id === item.id ? "flow-edge-selected" : ""} ${runtime.lastTransitionId === item.id ? "flow-edge-fired" : ""}`,
+            className: `${selection?.kind === "transition" && selection.id === item.id ? "flow-edge-selected" : ""} ${runtime.lastTransitionId === item.id ? "flow-edge-fired" : ""} ${pendingTransition?.id === item.id ? "flow-edge-draft" : ""}`,
             data: {
               label: item.label || "Edit logic",
               event: item.event,
               route: `${from} → ${to}`,
               selected:
                 selection?.kind === "transition" && selection.id === item.id,
+              draft: pendingTransition?.id === item.id,
               onSelect: selectTransition,
             },
           };
         }),
     [
       project.states,
-      project.transitions,
+      visibleTransitions,
+      pendingTransition,
       runtime.lastTransitionId,
       selection,
       selectTransition,
@@ -455,6 +470,11 @@ export default function FlowLab({
   );
 
   function enterMode(next: WorkspaceMode) {
+    if (next === "simulate" && pendingTransition) {
+      setSelection({ kind: "transition", id: pendingTransition.id });
+      setNotice("Create or cancel the new transition before testing the Flow.");
+      return;
+    }
     if (next === "simulate" && hasErrors) {
       setNotice("Fix Flow health errors before simulation.");
       return;
@@ -536,7 +556,7 @@ export default function FlowLab({
       project.states.find((item) => item.id === project.initialStateId) ??
       project.states[0];
     const position = {
-      x: (anchor?.position.x ?? 0) + 220,
+      x: (anchor?.position.x ?? 0) + 300,
       y: anchor?.position.y ?? 170,
     };
     while (
@@ -572,23 +592,31 @@ export default function FlowLab({
       "State created and selected. Name it in the Inspector, then press Add transition above the graph.",
     );
   }
-  function addTransition() {
+  function addTransition(fromStateId?: string, preferredEventId?: string) {
     if (project.states.length < 2) {
       setNotice(
         "Add a second state before creating a transition between states.",
       );
       return;
     }
+    if (pendingTransition) {
+      setSelection({ kind: "transition", id: pendingTransition.id });
+      setNotice(
+        "A new transition is already open. Create or cancel it before adding another.",
+      );
+      return;
+    }
     const firstRoute = project.transitions.length === 0;
-    const from = firstRoute
-      ? project.initialStateId
-      : (state?.id ?? project.initialStateId);
-    const to =
+    const from =
+      fromStateId ??
       (firstRoute
-        ? project.states.find((item) => item.id !== project.initialStateId)?.id
-        : project.states.find((item) => item.id !== from)?.id) ??
+        ? project.initialStateId
+        : (state?.id ?? project.initialStateId));
+    const to =
+      project.states.find((item) => item.id !== from)?.id ??
       project.initialStateId;
     const event =
+      project.events.find((item) => item.id === preferredEventId) ??
       project.events.find((item) => item.source !== "animation-complete") ??
       project.events[0];
     const eventId = event?.id ?? "TAKE";
@@ -596,30 +624,26 @@ export default function FlowLab({
     const priorities = project.transitions
       .filter((item) => item.from === from && item.event === eventId)
       .map((item) => item.priority);
-    setProject((current) => ({
-      ...current,
-      events: event
-        ? current.events
-        : [
-            ...current.events,
-            { id: eventId, label: "Take", source: "operator" },
-          ],
-      transitions: [
-        ...current.transitions,
-        {
-          id: transitionId,
-          from,
-          to,
-          event: eventId,
-          priority: priorities.length ? Math.max(...priorities) + 10 : 0,
-          label: "New transition",
-          actions: [],
-        },
-      ],
-    }));
+    if (!event)
+      setProject((current) => ({
+        ...current,
+        events: [
+          ...current.events,
+          { id: eventId, label: "Take", source: "operator" },
+        ],
+      }));
+    setPendingTransition({
+      id: transitionId,
+      from,
+      to,
+      event: eventId,
+      priority: priorities.length ? Math.max(...priorities) + 10 : 0,
+      label: "New transition",
+      actions: [],
+    });
     setSelection({ kind: "transition", id: transitionId });
     setNotice(
-      "Transition created and opened in the Inspector. Choose its source, destination, event, conditions, and actions.",
+      "New transition draft opened. Choose Starts in, Operator button, and Goes to, then press Create transition.",
     );
   }
   function addVariable() {
@@ -785,7 +809,7 @@ export default function FlowLab({
             ) : project.metadata?.renderer === "quiz" ? (
               <QuizPreview runtime={runtime} />
             ) : (
-              <GenericPreview runtime={runtime} />
+              <GenericPreview project={project} runtime={runtime} />
             )}
             <div className="preview-foot">
               <span>
@@ -852,10 +876,13 @@ export default function FlowLab({
                     <Plus size={14} /> Add state
                   </button>
                   <button
-                    onClick={addTransition}
+                    onClick={() => addTransition()}
                     disabled={project.states.length < 2}
                   >
-                    <Link2 size={14} /> Add transition
+                    <Link2 size={14} />
+                    {pendingTransition
+                      ? "Finish new transition"
+                      : "Add transition"}
                   </button>
                 </div>
               ) : (
@@ -880,7 +907,7 @@ export default function FlowLab({
               project={project}
               onSelect={setSelection}
               onAddState={addState}
-              onAddTransition={addTransition}
+              onAddTransition={() => addTransition()}
               onSimulate={() => enterMode("simulate")}
             />
           )}
@@ -922,10 +949,10 @@ export default function FlowLab({
           </div>
           <div className="graph-transition-strip">
             <span>TRANSITIONS - SELECT TO EDIT</span>
-            {project.transitions.length === 0 && (
+            {visibleTransitions.length === 0 && (
               <p>No transitions yet. Use Add transition above the graph.</p>
             )}
-            {[...project.transitions]
+            {[...visibleTransitions]
               .sort(
                 (a, b) =>
                   a.from.localeCompare(b.from) ||
@@ -935,7 +962,7 @@ export default function FlowLab({
               .map((item) => (
                 <button
                   key={item.id}
-                  className={`${runtime.lastTransitionId === item.id ? "fired" : ""} ${selection?.kind === "transition" && selection.id === item.id ? "selected" : ""}`}
+                  className={`${runtime.lastTransitionId === item.id ? "fired" : ""} ${selection?.kind === "transition" && selection.id === item.id ? "selected" : ""} ${pendingTransition?.id === item.id ? "draft" : ""}`}
                   onClick={() =>
                     setSelection({ kind: "transition", id: item.id })
                   }
@@ -948,7 +975,11 @@ export default function FlowLab({
                       ?.label ?? item.to}
                   </small>
                   <strong>{item.event}</strong>
-                  <span>{item.label || "Edit logic"}</span>
+                  <span>
+                    {pendingTransition?.id === item.id
+                      ? "New - not saved"
+                      : item.label || "Edit logic"}
+                  </span>
                 </button>
               ))}
           </div>
@@ -1074,6 +1105,52 @@ export default function FlowLab({
                       }
                     />
                   </label>
+                  {project.metadata?.renderer === "generic" && (
+                    <div className="state-visual-summary">
+                      <small>WHAT THE PREVIEW SHOWS IN THIS STATE</small>
+                      {state.id === project.initialStateId ? (
+                        <strong>Off air - graphic data is hidden</strong>
+                      ) : (
+                        <>
+                          <strong>
+                            {project.variables[0]?.label ??
+                              "No headline variable"}
+                          </strong>
+                          <span>
+                            The blank renderer uses the first variable as its
+                            headline in every on-air state.
+                          </span>
+                          {project.variables[0] && (
+                            <button
+                              onClick={() =>
+                                setSelection({
+                                  kind: "variable",
+                                  id: project.variables[0].id,
+                                })
+                              }
+                            >
+                              Edit {project.variables[0].label}
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                  {mode === "design" && (
+                    <div className="state-route-actions">
+                      <strong>What can happen from {state.label}?</strong>
+                      <span>
+                        Add a transition, then choose the operator button and
+                        destination state in the new-transition Inspector.
+                      </span>
+                      <button
+                        onClick={() => addTransition(state.id)}
+                        disabled={Boolean(pendingTransition)}
+                      >
+                        <Link2 size={14} /> Add transition from {state.label}
+                      </button>
+                    </div>
+                  )}
                   {mode === "design" && state.id !== project.initialStateId && (
                     <button
                       className="delete-transition"
@@ -1110,22 +1187,45 @@ export default function FlowLab({
                   key={transition.id}
                   transition={transition}
                   project={project}
-                  onSave={(next) =>
+                  isNew={pendingTransition?.id === transition.id}
+                  onDraftChange={setPendingTransition}
+                  onSave={(next) => {
+                    const isNew = pendingTransition?.id === next.id;
                     setProject((current) => ({
                       ...current,
-                      transitions: current.transitions.map((item) =>
-                        item.id === next.id ? next : item,
-                      ),
-                    }))
-                  }
-                  onDelete={() => {
-                    setProject((current) => ({
-                      ...current,
-                      transitions: current.transitions.filter(
-                        (item) => item.id !== transition.id,
-                      ),
+                      transitions: isNew
+                        ? [...current.transitions, next]
+                        : current.transitions.map((item) =>
+                            item.id === next.id ? next : item,
+                          ),
                     }));
-                    setSelection(null);
+                    if (isNew) setPendingTransition(null);
+                    setNotice(
+                      isNew
+                        ? "Transition created. Select its label between the states to edit it again."
+                        : "Transition changes saved.",
+                    );
+                  }}
+                  onDelete={() => {
+                    if (pendingTransition?.id === transition.id) {
+                      setPendingTransition(null);
+                      setSelection({
+                        kind: "state",
+                        id:
+                          transition.from === "*"
+                            ? project.initialStateId
+                            : transition.from,
+                      });
+                      setNotice("New transition canceled.");
+                    } else {
+                      setProject((current) => ({
+                        ...current,
+                        transitions: current.transitions.filter(
+                          (item) => item.id !== transition.id,
+                        ),
+                      }));
+                      setSelection(null);
+                    }
                   }}
                 />
               )}
@@ -1156,6 +1256,9 @@ export default function FlowLab({
                     event={selectedEvent}
                     project={project}
                     onSelectTransition={selectTransition}
+                    onCreateTransition={() =>
+                      addTransition(undefined, selectedEvent.id)
+                    }
                   />
                   <EventContractEditor
                     event={selectedEvent}
@@ -1276,7 +1379,9 @@ function AuthoringGuide({
   const exampleTransition =
     project.transitions.find((item) => item.from !== "*") ??
     project.transitions[0];
-  const exampleVariable = project.variables[0];
+  const exampleEvent =
+    project.events.find((item) => (item.source ?? "operator") === "operator") ??
+    project.events[0];
   return (
     <div className="author-guide">
       <div>
@@ -1303,36 +1408,23 @@ function AuthoringGuide({
           <small>Stable on-air situation</small>
         </span>
       </button>
-      <button
-        disabled={project.states.length < 2}
-        onClick={
-          isBlank && !exampleTransition
-            ? onAddTransition
-            : () =>
-                exampleTransition &&
-                onSelect({ kind: "transition", id: exampleTransition.id })
-        }
-      >
+      <button disabled={project.states.length < 2} onClick={onAddTransition}>
         <b>2</b>
         <span>
-          {isBlank && !exampleTransition
-            ? "Add transition"
-            : "Edit a transition"}
-          <small>Connect source, event, and destination</small>
+          {exampleTransition ? "Add another transition" : "Add transition"}
+          <small>Create a new connection between states</small>
         </span>
       </button>
       <button
-        disabled={!exampleTransition}
+        disabled={!exampleEvent}
         onClick={() =>
-          exampleTransition
-            ? onSelect({ kind: "transition", id: exampleTransition.id })
-            : exampleVariable &&
-              onSelect({ kind: "variable", id: exampleVariable.id })
+          exampleEvent && onSelect({ kind: "event", id: exampleEvent.id })
         }
       >
         <b>3</b>
         <span>
-          Edit the logic<small>Conditions and named actions</small>
+          Connect operator buttons
+          <small>See which transitions use Take, Next, or Out</small>
         </span>
       </button>
       <button disabled={!exampleTransition} onClick={onSimulate}>
@@ -1389,10 +1481,12 @@ function EventRelationship({
   event,
   project,
   onSelectTransition,
+  onCreateTransition,
 }: {
   event: FlowProject["events"][number];
   project: FlowProject;
   onSelectTransition: (id: string) => void;
+  onCreateTransition: () => void;
 }) {
   const routes = project.transitions.filter((item) => item.event === event.id);
   return (
@@ -1425,10 +1519,15 @@ function EventRelationship({
         </button>
       ))}
       {!routes.length && (
-        <p className="relationship-warning">
-          This event cannot appear as a legal operator action until a transition
-          selects it in the Event field.
-        </p>
+        <div className="relationship-warning">
+          <p>
+            This button is not connected yet. It appears to the operator only in
+            states that have a transition using it.
+          </p>
+          <button onClick={onCreateTransition}>
+            <Link2 size={13} /> Use {event.label} in a new transition
+          </button>
+        </div>
       )}
     </div>
   );
@@ -1511,9 +1610,10 @@ function VariableRelationship({
       )}
       {project.metadata?.renderer === "generic" && (
         <p className="relationship-limit">
-          The generic preview currently displays every variable in every state.
-          State-specific visual slots and visibility rules are not yet editable
-          in this prototype.
+          The blank renderer hides data in the initial OFF state, uses the first
+          variable as its headline in every other state, and lists additional
+          variables beneath it. Editable per-state visual slots remain future
+          design-layer work.
         </p>
       )}
     </div>
@@ -1665,7 +1765,7 @@ function GraphicContractPanel({
       </div>
       <p className="graphic-contract-note">
         {renderer === "generic"
-          ? "The generic preview shows every variable in every state. Choosing which visual text slot appears in each state is not yet authorable here; that requires the future design-layer binding UI."
+          ? "The blank renderer hides the graphic in the initial OFF state. In every other state, the first variable is the headline and later variables are supporting data. Editable per-state slot binding remains future design-layer work."
           : "This reference renderer is pre-wired. Editable visual slot mapping belongs to the next design-layer integration, while the Flow contract remains platform-neutral."}
       </p>
     </section>
@@ -1866,7 +1966,7 @@ function EventContractEditor({
         />
       </label>
       <label>
-        Source
+        Triggered by
         <select
           value={event.source ?? "operator"}
           onChange={(change) =>
@@ -1876,10 +1976,14 @@ function EventContractEditor({
             })
           }
         >
-          <option value="operator">Operator</option>
-          <option value="external">External</option>
-          <option value="animation-complete">Animation complete</option>
+          <option value="operator">Operator button</option>
+          <option value="external">External system</option>
+          <option value="animation-complete">Animation completion</option>
         </select>
+        <small className="field-help">
+          Operator button means this event can appear as a control when a
+          transition makes it legal from the current state.
+        </small>
       </label>
       {event.source === "animation-complete" && (
         <label>
@@ -2316,21 +2420,31 @@ function TracePanel({
 function TransitionEditor({
   transition,
   project,
+  isNew,
+  onDraftChange,
   onSave,
   onDelete,
 }: {
   transition: FlowTransition;
   project: FlowProject;
+  isNew: boolean;
+  onDraftChange: (transition: FlowTransition) => void;
   onSave: (transition: FlowTransition) => void;
   onDelete: () => void;
 }) {
   const [draft, setDraft] = useState(transition);
+  const updateDraft = (next: FlowTransition) => {
+    setDraft(next);
+    if (isNew) onDraftChange(next);
+  };
   const dirty = JSON.stringify(draft) !== JSON.stringify(transition);
   const errors = validateProject({
     ...project,
-    transitions: project.transitions.map((item) =>
-      item.id === draft.id ? draft : item,
-    ),
+    transitions: isNew
+      ? [...project.transitions, draft]
+      : project.transitions.map((item) =>
+          item.id === draft.id ? draft : item,
+        ),
   }).filter((item) => item.level === "error" && item.transitionId === draft.id);
   const sourceLabel =
     draft.from === "*"
@@ -2342,11 +2456,11 @@ function TransitionEditor({
   return (
     <section className="panel transition-editor">
       <Title
-        eyebrow="Edit transition"
+        eyebrow={isNew ? "New transition - not saved" : "Edit transition"}
         title={draft.label || draft.event}
         right={
           <span className={`draft-status ${dirty ? "dirty" : ""}`}>
-            {dirty ? "Unsaved changes" : "Saved"}
+            {isNew ? "Creating new" : dirty ? "Unsaved changes" : "Saved"}
           </span>
         }
       />
@@ -2354,8 +2468,8 @@ function TransitionEditor({
         <div className="selection-explainer">
           <strong>This is where the behavior lives</strong>
           <span>
-            Choose the triggering event, the legal source state, the destination
-            state, optional conditions, and the actions that run.
+            Choose the operator button or trigger, where it starts, where it
+            goes, optional conditions, and the actions that run.
           </span>
         </div>
         <div className="transition-summary">
@@ -2369,7 +2483,7 @@ function TransitionEditor({
             </span>
             <i>→</i>
             <span>
-              <small>LEGAL FROM</small>
+              <small>STARTS IN</small>
               <b>{sourceLabel}</b>
             </span>
             <i>→</i>
@@ -2389,16 +2503,16 @@ function TransitionEditor({
           <input
             value={draft.label || ""}
             onChange={(event) =>
-              setDraft({ ...draft, label: event.target.value })
+              updateDraft({ ...draft, label: event.target.value })
             }
           />
         </label>
         <label>
-          From
+          Starts in state
           <select
             value={draft.from}
             onChange={(event) =>
-              setDraft({ ...draft, from: event.target.value })
+              updateDraft({ ...draft, from: event.target.value })
             }
           >
             <option value="*">Any state</option>
@@ -2410,10 +2524,12 @@ function TransitionEditor({
           </select>
         </label>
         <label>
-          To
+          Goes to state
           <select
             value={draft.to}
-            onChange={(event) => setDraft({ ...draft, to: event.target.value })}
+            onChange={(event) =>
+              updateDraft({ ...draft, to: event.target.value })
+            }
           >
             {project.states.map((state) => (
               <option key={state.id} value={state.id}>
@@ -2423,11 +2539,11 @@ function TransitionEditor({
           </select>
         </label>
         <label>
-          Event
+          Operator button / event
           <select
             value={draft.event}
             onChange={(event) =>
-              setDraft({ ...draft, event: event.target.value })
+              updateDraft({ ...draft, event: event.target.value })
             }
           >
             {project.events.map((item) => (
@@ -2445,7 +2561,10 @@ function TransitionEditor({
             step="10"
             value={draft.priority}
             onChange={(event) =>
-              setDraft({ ...draft, priority: Number(event.target.value) })
+              updateDraft({
+                ...draft,
+                priority: Number(event.target.value),
+              })
             }
           />
         </label>
@@ -2453,12 +2572,12 @@ function TransitionEditor({
           condition={draft.condition}
           project={project}
           eventId={draft.event}
-          onChange={(condition) => setDraft({ ...draft, condition })}
+          onChange={(condition) => updateDraft({ ...draft, condition })}
         />
         <ActionEditor
           actions={draft.actions}
           project={project}
-          onChange={(actions) => setDraft({ ...draft, actions })}
+          onChange={(actions) => updateDraft({ ...draft, actions })}
         />
         {errors.map((error, index) => (
           <div className="edit-error" key={index}>
@@ -2469,17 +2588,19 @@ function TransitionEditor({
         <div className="edit-actions">
           <button
             className="save-transition"
-            disabled={!dirty || errors.length > 0}
+            disabled={(!isNew && !dirty) || errors.length > 0}
             onClick={() => onSave(draft)}
           >
-            Save transition
+            {isNew ? "Create transition" : "Save transition"}
           </button>
-          <button disabled={!dirty} onClick={() => setDraft(transition)}>
-            Discard
-          </button>
+          {!isNew && (
+            <button disabled={!dirty} onClick={() => updateDraft(transition)}>
+              Discard changes
+            </button>
+          )}
         </div>
         <button className="delete-transition" onClick={onDelete}>
-          Delete transition
+          {isNew ? "Cancel new transition" : "Delete transition"}
         </button>
       </div>
     </section>
