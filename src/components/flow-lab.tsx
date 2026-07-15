@@ -156,6 +156,7 @@ export function createNativeTransitionEdge(
   selected: boolean,
   fired: boolean,
   draft = false,
+  onActivate?: () => void,
 ): Edge {
   const emphasized = selected || draft;
   return {
@@ -165,6 +166,18 @@ export function createNativeTransitionEdge(
     animated: fired && !draft,
     markerEnd: { type: MarkerType.ArrowClosed },
     interactionWidth: 36,
+    focusable: true,
+    ariaRole: "button",
+    ariaLabel: `Edit transition ${transition.label || transition.id}: ${transition.from} to ${transition.to} on ${eventLabel}`,
+    domAttributes: onActivate
+      ? {
+          onKeyDown: (event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            onActivate();
+          },
+        }
+      : undefined,
     className: `${selected ? "flow-edge-selected" : ""} ${fired ? "flow-edge-fired" : ""} ${draft ? "flow-edge-draft" : ""}`,
     style: {
       stroke: draft ? "#f6bc56" : undefined,
@@ -391,6 +404,7 @@ export default function FlowLab({
             selected,
             runtime.lastTransitionId === item.id,
             pendingTransition?.id === item.id,
+            () => selectTransition(item.id),
           );
         }),
     [
@@ -398,6 +412,7 @@ export default function FlowLab({
       project.events,
       project.transitions,
       runtime.lastTransitionId,
+      selectTransition,
       selection,
     ],
   );

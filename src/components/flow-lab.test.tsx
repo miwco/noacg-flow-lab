@@ -28,7 +28,7 @@ beforeAll(() => {
 afterEach(() => cleanup());
 
 describe("FlowLab transition creation", () => {
-  it("keeps a new transition separate until it is explicitly created", () => {
+  it("creates, cancels, and reopens a transition from its graph edge", () => {
     localStorage.clear();
     const view = render(<FlowLab />);
 
@@ -82,6 +82,27 @@ describe("FlowLab transition creation", () => {
     expect(
       view.container.querySelector(".transition-edge-label"),
     ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      view.container.querySelector('.react-flow__node[data-id="off"]')!,
+    );
+    expect(screen.getByText("State ID")).toBeInTheDocument();
+
+    const savedEdge = view.container.querySelector(
+      ".react-flow__edge .react-flow__edge-interaction",
+    )!;
+    fireEvent.click(savedEdge);
+    expect(screen.getByText("Edit transition")).toBeInTheDocument();
+    expect(screen.getByLabelText("Label")).toHaveValue("New transition");
+
+    fireEvent.click(
+      view.container.querySelector('.react-flow__node[data-id="off"]')!,
+    );
+    const savedEdgeGroup = view.container.querySelector(
+      ".react-flow__edge[role='button']",
+    )!;
+    fireEvent.keyDown(savedEdgeGroup, { key: "Enter" });
+    expect(screen.getByText("Edit transition")).toBeInTheDocument();
   });
 
   it("uses a native SVG edge with a large click target and event label", () => {
@@ -104,6 +125,9 @@ describe("FlowLab transition creation", () => {
     expect(edge.type).toBeUndefined();
     expect(edge.label).toBe("Take");
     expect(edge.interactionWidth).toBe(36);
+    expect(edge.focusable).toBe(true);
+    expect(edge.ariaRole).toBe("button");
+    expect(edge.ariaLabel).toBe("Edit transition Take in: off to in on Take");
     expect(edge.style).toMatchObject({ strokeWidth: 4 });
   });
 
