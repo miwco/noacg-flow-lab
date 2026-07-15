@@ -5,6 +5,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import FlowLab, {
   createNativeTransitionEdge,
+  createStateGraphNode,
   graphTransitions,
 } from "./flow-lab";
 
@@ -18,6 +19,10 @@ beforeAll(() => {
   vi.stubGlobal("ResizeObserver", ResizeObserverMock);
   vi.stubGlobal("DOMMatrixReadOnly", class {});
   vi.stubGlobal("crypto", { randomUUID: () => "test-id" });
+  Object.defineProperty(SVGElement.prototype, "getBBox", {
+    configurable: true,
+    value: () => ({ x: 0, y: 0, width: 64, height: 12 }),
+  });
 });
 
 afterEach(() => cleanup());
@@ -44,11 +49,17 @@ describe("FlowLab transition creation", () => {
     expect(
       screen.getByText("No transitions yet.", { exact: false }),
     ).toBeInTheDocument();
+    expect(
+      view.container.querySelector(".flow-edge-draft"),
+    ).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", { name: "Cancel new transition" }),
     );
     expect(
       screen.queryByText("New transition - not created"),
+    ).not.toBeInTheDocument();
+    expect(
+      view.container.querySelector(".flow-edge-draft"),
     ).not.toBeInTheDocument();
     fireEvent.click(
       screen.getAllByRole("button", { name: "Add transition" })[0],
@@ -58,6 +69,12 @@ describe("FlowLab transition creation", () => {
     expect(screen.getByText("Transition created.")).toBeInTheDocument();
     expect(
       screen.queryByText("No transitions yet.", { exact: false }),
+    ).not.toBeInTheDocument();
+    expect(
+      view.container.querySelector(".react-flow__edge"),
+    ).toBeInTheDocument();
+    expect(
+      view.container.querySelector(".flow-edge-draft"),
     ).not.toBeInTheDocument();
     expect(
       view.container.querySelector(".react-flow__edgelabel-renderer"),
@@ -112,5 +129,25 @@ describe("FlowLab transition creation", () => {
     expect(edge.animated).toBe(false);
     expect(graphTransitions([], pending)).toEqual([pending]);
     expect(graphTransitions([], null)).toEqual([]);
+  });
+
+  it("keeps explicit endpoint geometry when controlled nodes are recreated", () => {
+    const state = {
+      id: "off",
+      label: "OFF",
+      description: "Graphic is off air.",
+      position: { x: 100, y: 170 },
+    };
+
+    const unselected = createStateGraphNode(state, false, false);
+    const selected = createStateGraphNode(state, false, true);
+
+    expect(unselected.handles).toEqual(selected.handles);
+    expect(selected.handles).toEqual([
+      expect.objectContaining({ type: "target", position: "left", x: 0 }),
+      expect.objectContaining({ type: "source", position: "right", x: 146 }),
+    ]);
+    expect(selected.width).toBe(147);
+    expect(selected.height).toBe(76);
   });
 });

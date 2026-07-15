@@ -31,3 +31,4 @@
 - Prefer React Flow native SVG edges and labels. Do not place a full-canvas HTML edge-label overlay above editor controls.
 - Creating a transition must be visibly distinct from editing one. A new route must not enter the saved project until the author explicitly creates it.
 - Show a pending transition as a native dashed draft edge so its source and destination are visible before creation. Canceling it must remove the edge without changing the saved project.
+- Controlled React Flow state nodes must retain declarative handle geometry across selection updates so transition edges never depend on resize-observer timing.

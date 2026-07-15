@@ -12,6 +12,7 @@ import {
   type Connection,
   type Edge,
   type Node,
+  type NodeHandle,
   type NodeProps,
   type OnNodesChange,
   type ReactFlowInstance,
@@ -98,6 +99,49 @@ function StateNode({ data }: NodeProps<Node<StateData>>) {
   );
 }
 const nodeTypes = { state: StateNode };
+const STATE_NODE_WIDTH = 147;
+const STATE_NODE_HEIGHT = 76;
+const stateNodeHandles: NodeHandle[] = [
+  {
+    id: null,
+    type: "target",
+    position: Position.Left,
+    x: 0,
+    y: 37,
+    width: 1,
+    height: 2,
+  },
+  {
+    id: null,
+    type: "source",
+    position: Position.Right,
+    x: STATE_NODE_WIDTH - 1,
+    y: 37,
+    width: 1,
+    height: 2,
+  },
+];
+
+export function createStateGraphNode(
+  state: FlowProject["states"][number],
+  active: boolean,
+  selected: boolean,
+): Node<StateData> {
+  return {
+    id: state.id,
+    type: "state",
+    position: state.position,
+    width: STATE_NODE_WIDTH,
+    height: STATE_NODE_HEIGHT,
+    handles: stateNodeHandles,
+    data: {
+      label: state.label,
+      description: state.description,
+      active,
+      selected,
+    },
+  };
+}
 
 export function graphTransitions(
   saved: FlowTransition[],
@@ -322,19 +366,13 @@ export default function FlowLab({
 
   const nodes = useMemo<Node<StateData>[]>(
     () =>
-      project.states.map((item) => ({
-        id: item.id,
-        type: "state",
-        position: item.position,
-        width: 147,
-        height: 76,
-        data: {
-          label: item.label,
-          description: item.description,
-          active: runtime.stateId === item.id,
-          selected: selection?.kind === "state" && selection.id === item.id,
-        },
-      })),
+      project.states.map((item) =>
+        createStateGraphNode(
+          item,
+          runtime.stateId === item.id,
+          selection?.kind === "state" && selection.id === item.id,
+        ),
+      ),
     [project.states, runtime.stateId, selection],
   );
   const edges = useMemo<Edge[]>(
