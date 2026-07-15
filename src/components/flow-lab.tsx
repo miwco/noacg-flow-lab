@@ -48,6 +48,7 @@ import type {
   AvailableEvent,
   FlowAction,
   FlowConditionGroup,
+  FlowEvent,
   FlowEventPayload,
   FlowField,
   FlowPredicate,
@@ -148,6 +149,37 @@ export function graphTransitions(
   pending: FlowTransition | null,
 ) {
   return pending ? [...saved, pending] : saved;
+}
+
+export function createOperatorEventDraft(
+  label: string,
+  existingEvents: FlowEvent[],
+): FlowEvent {
+  const cleanLabel = label.trim();
+  const baseId =
+    cleanLabel
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "EVENT";
+  const existingIds = new Set(
+    existingEvents.map((event) => event.id.toUpperCase()),
+  );
+  let id = baseId;
+  let suffix = 2;
+  while (existingIds.has(id)) id = `${baseId}_${suffix++}`;
+  const order =
+    Math.max(
+      0,
+      ...existingEvents.map((event) => event.presentation?.order ?? 0),
+    ) + 1;
+  return {
+    id,
+    label: cleanLabel,
+    description: `${cleanLabel} operator action.`,
+    source: "operator",
+    payload: [],
+    presentation: { intent: "normal", order },
+  };
 }
 
 export function createNativeTransitionEdge(
@@ -1154,10 +1186,19 @@ export default function FlowLab({
                   project={project}
                   isNew={pendingTransition?.id === transition.id}
                   onDraftChange={setPendingTransition}
-                  onSave={(next) => {
+                  onSave={(next, newEvents) => {
                     const isNew = pendingTransition?.id === next.id;
                     setProject((current) => ({
                       ...current,
+                      events: [
+                        ...current.events,
+                        ...newEvents.filter(
+                          (event) =>
+                            !current.events.some(
+                              (existing) => existing.id === event.id,
+                            ),
+                        ),
+                      ],
                       transitions: isNew
                         ? [...current.transitions, next]
                         : current.transitions.map((item) =>
@@ -1167,8 +1208,12 @@ export default function FlowLab({
                     if (isNew) setPendingTransition(null);
                     setNotice(
                       isNew
-                        ? "Transition created."
-                        : "Transition changes saved.",
+                        ? newEvents.length
+                          ? `Transition and ${newEvents[0].label} operator action created.`
+                          : "Transition created."
+                        : newEvents.length
+                          ? `Transition changes and ${newEvents[0].label} operator action saved.`
+                          : "Transition changes saved.",
                     );
                   }}
                   onDelete={() => {
@@ -2379,20 +2424,28 @@ function TransitionEditor({
   project: FlowProject;
   isNew: boolean;
   onDraftChange: (transition: FlowTransition) => void;
-  onSave: (transition: FlowTransition) => void;
+  onSave: (transition: FlowTransition, newEvents: FlowEvent[]) => void;
   onDelete: () => void;
 }) {
   const [draft, setDraft] = useState(transition);
+  const [draftEvents, setDraftEvents] = useState<FlowEvent[]>([]);
+  const [creatingEvent, setCreatingEvent] = useState(false);
+  const [newEventLabel, setNewEventLabel] = useState("");
   const updateDraft = (next: FlowTransition) => {
     setDraft(next);
     if (isNew) onDraftChange(next);
   };
-  const dirty = JSON.stringify(draft) !== JSON.stringify(transition);
+  const editorProject = draftEvents.length
+    ? { ...project, events: [...project.events, ...draftEvents] }
+    : project;
+  const dirty =
+    JSON.stringify(draft) !== JSON.stringify(transition) ||
+    draftEvents.length > 0;
   const errors = validateProject({
-    ...project,
+    ...editorProject,
     transitions: isNew
-      ? [...project.transitions, draft]
-      : project.transitions.map((item) =>
+      ? [...editorProject.transitions, draft]
+      : editorProject.transitions.map((item) =>
           item.id === draft.id ? draft : item,
         ),
   }).filter((item) => item.level === "error" && item.transitionId === draft.id);
@@ -2427,7 +2480,7 @@ function TransitionEditor({
             <span>
               <small>BUTTON / EVENT</small>
               <b>
-                {project.events.find((item) => item.id === draft.event)
+                {editorProject.events.find((item) => item.id === draft.event)
                   ?.label ?? draft.event}
               </b>
             </span>
@@ -2488,21 +2541,95 @@ function TransitionEditor({
             ))}
           </select>
         </label>
-        <label>
-          Event
-          <select
-            value={draft.event}
-            onChange={(event) =>
-              updateDraft({ ...draft, event: event.target.value })
-            }
-          >
-            {project.events.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="transition-event-field">
+          <div>
+            <label>
+              Event
+              <select
+                value={draft.event}
+                onChange={(event) => {
+                  const eventId = event.target.value;
+                  setDraftEvents((items) =>
+                    items.filter((item) => item.id === eventId),
+                  );
+                  updateDraft({ ...draft, event: eventId });
+                }}
+              >
+                {editorProject.events.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="new-operator-event"
+              onClick={() => setCreatingEvent((current) => !current)}
+            >
+              <Plus size={12} />
+              {draftEvents.length
+                ? "Replace staged event"
+                : "New operator event"}
+            </button>
+          </div>
+          {creatingEvent && (
+            <div className="inline-event-creator">
+              <label>
+                Operator button name
+                <input
+                  autoFocus
+                  placeholder="Next, Out, Reset..."
+                  value={newEventLabel}
+                  onChange={(event) => setNewEventLabel(event.target.value)}
+                />
+              </label>
+              <span>
+                Event ID:
+                <b>
+                  {newEventLabel.trim()
+                    ? createOperatorEventDraft(newEventLabel, project.events).id
+                    : "Enter a name"}
+                </b>
+              </span>
+              <div>
+                <button
+                  disabled={!newEventLabel.trim()}
+                  onClick={() => {
+                    const event = createOperatorEventDraft(
+                      newEventLabel,
+                      project.events,
+                    );
+                    setDraftEvents([event]);
+                    updateDraft({ ...draft, event: event.id });
+                    setCreatingEvent(false);
+                    setNewEventLabel("");
+                  }}
+                >
+                  Create and use
+                </button>
+                <button
+                  onClick={() => {
+                    setCreatingEvent(false);
+                    setNewEventLabel("");
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          <p>
+            The operator button appears only when this event has a legal
+            transition from the current state.
+          </p>
+          {draftEvents[0] && (
+            <p className="event-staged">
+              <b>{draftEvents[0].label}</b> is staged with this transition.
+              {isNew ? " Cancel new transition" : " Discard changes"} removes it
+              without changing the project.
+            </p>
+          )}
+        </div>
         <label>
           Branch priority
           <input
@@ -2520,13 +2647,13 @@ function TransitionEditor({
         </label>
         <ConditionEditor
           condition={draft.condition}
-          project={project}
+          project={editorProject}
           eventId={draft.event}
           onChange={(condition) => updateDraft({ ...draft, condition })}
         />
         <ActionEditor
           actions={draft.actions}
-          project={project}
+          project={editorProject}
           onChange={(actions) => updateDraft({ ...draft, actions })}
         />
         {errors.map((error, index) => (
@@ -2539,12 +2666,25 @@ function TransitionEditor({
           <button
             className="save-transition"
             disabled={(!isNew && !dirty) || errors.length > 0}
-            onClick={() => onSave(draft)}
+            onClick={() => {
+              onSave(draft, draftEvents);
+              setDraftEvents([]);
+              setCreatingEvent(false);
+              setNewEventLabel("");
+            }}
           >
             {isNew ? "Create transition" : "Save transition"}
           </button>
           {!isNew && (
-            <button disabled={!dirty} onClick={() => updateDraft(transition)}>
+            <button
+              disabled={!dirty}
+              onClick={() => {
+                updateDraft(transition);
+                setDraftEvents([]);
+                setCreatingEvent(false);
+                setNewEventLabel("");
+              }}
+            >
               Discard changes
             </button>
           )}

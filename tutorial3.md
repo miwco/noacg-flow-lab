@@ -148,13 +148,13 @@ Configure the new transition:
 - Label: `Feature guest`
 - From: HOLD
 - To: FEATURED
-- Event: choose an existing event for demonstration
+- Event: press **New operator event**, enter `Feature`, then press **Create and use**
 - Priority: 0
 - Action: Play animation `lower-third-feature`
 
 Save the transition.
 
-If appropriate, create a new event named `FEATURE` first and return to the transition to select it.
+Point out that the generated event ID is `FEATURE`. The new contract and transition remain staged together until **Create transition** is pressed.
 
 ### Narration
 
@@ -162,9 +162,9 @@ If appropriate, create a new event named `FEATURE` first and return to the trans
 
 Conditions are optional typed rules. Priorities make competing branches deterministic. Actions describe what data or named animation contract runs when the route succeeds."
 
-### Demonstrate operator-action creation
+### Demonstrate operator-action legality
 
-Under **Behavior contracts**, press **Operator action**. Explain that an operator-source event declares a potential button, but the button becomes legal and visible only after a transition selects that event from the current state. Select the event's listed route to return directly to its transition logic.
+Show the message beneath the Event field: the operator button appears only when the event has a legal transition from the current state. After saving, find FEATURE under **Behavior contracts** and select its listed route to return directly to the transition logic.
 
 ## Scene 8 - Connect changing data to the renderer
 
@@ -236,9 +236,7 @@ We add an ON AIR state, connect OFF to it, choose TAKE as the event, and add a n
 
 ### On screen
 
-Create a `TAKE_OUT` event in Data contracts.
-
-Connect ON AIR back to OFF and configure:
+Connect ON AIR back to OFF. In its Event field, press **New operator event**, enter `Take out`, and press **Create and use**. Configure:
 
 - Event: TAKE_OUT
 - Action: Play animation `graphic-out`
@@ -247,7 +245,7 @@ Save and confirm Flow health.
 
 ### Narration
 
-"A complete on-air behavior also needs a legal way out. Events are declared contracts. Transitions decide where those events are legal.
+"A complete on-air behavior also needs a legal way out. The inline creator adds the event contract without making you leave the transition. Events are declared contracts. Transitions decide where those events are legal.
 
 Flow health checks missing references, impossible branches, duplicate priorities, invalid conditions, and unreachable states before simulation or export."
 

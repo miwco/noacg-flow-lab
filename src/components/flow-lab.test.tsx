@@ -5,6 +5,7 @@ import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import FlowLab, {
   createNativeTransitionEdge,
+  createOperatorEventDraft,
   createStateGraphNode,
   graphTransitions,
 } from "./flow-lab";
@@ -28,6 +29,45 @@ beforeAll(() => {
 afterEach(() => cleanup());
 
 describe("FlowLab transition creation", () => {
+  it("creates and assigns an operator event without leaving the transition", () => {
+    localStorage.clear();
+    const view = render(<FlowLab />);
+
+    fireEvent.change(view.container.querySelector(".reference-picker")!, {
+      target: { value: "blank" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add state" }));
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Add transition" })[0],
+    );
+
+    const eventSelect = screen.getByLabelText("Event") as HTMLSelectElement;
+    expect(Array.from(eventSelect.options, (option) => option.value)).toEqual([
+      "TAKE",
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "New operator event" }));
+    fireEvent.change(screen.getByLabelText("Operator button name"), {
+      target: { value: "Next" },
+    });
+    expect(screen.getByText("NEXT")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create and use" }));
+
+    expect(Array.from(eventSelect.options, (option) => option.value)).toEqual([
+      "TAKE",
+      "NEXT",
+    ]);
+    expect(eventSelect).toHaveValue("NEXT");
+
+    fireEvent.click(screen.getByRole("button", { name: "Create transition" }));
+    expect(
+      screen.getByText("Transition and Next operator action created."),
+    ).toBeInTheDocument();
+    expect(
+      view.container.querySelector(".command-controls button"),
+    ).toHaveTextContent("Next");
+  });
+
   it("creates, cancels, and reopens a transition from its graph edge", () => {
     localStorage.clear();
     const view = render(<FlowLab />);
@@ -105,6 +145,35 @@ describe("FlowLab transition creation", () => {
     expect(screen.getByText("Edit transition")).toBeInTheDocument();
   });
 
+  it("discards an inline event when its new transition is canceled", () => {
+    localStorage.clear();
+    const view = render(<FlowLab />);
+
+    fireEvent.change(view.container.querySelector(".reference-picker")!, {
+      target: { value: "blank" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add state" }));
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Add transition" })[0],
+    );
+    fireEvent.click(screen.getByRole("button", { name: "New operator event" }));
+    fireEvent.change(screen.getByLabelText("Operator button name"), {
+      target: { value: "Out" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create and use" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Cancel new transition" }),
+    );
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Add transition" })[0],
+    );
+    const eventSelect = screen.getByLabelText("Event") as HTMLSelectElement;
+    expect(Array.from(eventSelect.options, (option) => option.value)).toEqual([
+      "TAKE",
+    ]);
+  });
+
   it("uses a native SVG edge with a large click target and event label", () => {
     const edge = createNativeTransitionEdge(
       {
@@ -173,5 +242,19 @@ describe("FlowLab transition creation", () => {
     ]);
     expect(selected.width).toBe(147);
     expect(selected.height).toBe(76);
+  });
+
+  it("generates stable unique IDs for inline operator events", () => {
+    const existing = [
+      createOperatorEventDraft("Next", []),
+      createOperatorEventDraft("Next", [createOperatorEventDraft("Next", [])]),
+    ];
+
+    expect(existing.map((event) => event.id)).toEqual(["NEXT", "NEXT_2"]);
+    expect(createOperatorEventDraft("Take out", existing)).toMatchObject({
+      id: "TAKE_OUT",
+      label: "Take out",
+      source: "operator",
+    });
   });
 });
