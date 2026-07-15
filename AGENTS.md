@@ -33,4 +33,5 @@
 - Show a pending transition as a native dashed draft edge so its source and destination are visible before creation. Canceling it must remove the edge without changing the saved project.
 - Controlled React Flow state nodes must retain declarative handle geometry across selection updates so transition edges never depend on resize-observer timing.
 - Native transition edges must keep a generous pointer hit target, visible hover and focus feedback, and keyboard activation that selects the same transition as a pointer click.
+- Variable authoring must show the renderer slot, visibility, and current runtime value without implying that variables belong to states. Variables not consumed by a pre-wired reference renderer must be clearly marked as unmapped.
 - Authors must be able to create and assign an operator event without leaving the transition editor. Stage the event with the transition so canceling a new transition does not leave an unused event contract behind.

@@ -8,7 +8,12 @@ import FlowLab, {
   createOperatorEventDraft,
   createStateGraphNode,
   graphTransitions,
+  rendererVariableConnection,
+  transitionVariableUsage,
 } from "./flow-lab";
+import { blankProject } from "@/flow/blank-project";
+import { lowerThirdProject } from "@/flow/lower-third-project";
+import { quizProject } from "@/flow/quiz-project";
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -256,5 +261,65 @@ describe("FlowLab transition creation", () => {
       label: "Take out",
       source: "operator",
     });
+  });
+});
+
+describe("FlowLab variable connections", () => {
+  it("describes the real renderer slot instead of assigning data to a state", () => {
+    expect(
+      rendererVariableConnection(blankProject, blankProject.variables[0]),
+    ).toMatchObject({
+      connected: true,
+      slot: "Generated data row: headline",
+      visibility: "Every state",
+    });
+    expect(
+      rendererVariableConnection(
+        lowerThirdProject,
+        lowerThirdProject.variables[0],
+      ),
+    ).toMatchObject({
+      connected: true,
+      slot: "Primary name text",
+      visibility: "On air in IN and HOLD",
+    });
+  });
+
+  it("labels whether transition logic reads or changes a variable", () => {
+    const selectionRoute = quizProject.transitions.find((transition) =>
+      transition.actions.some(
+        (action) =>
+          action.type === "set-variable" &&
+          action.variable === "selectedAnswer",
+      ),
+    )!;
+
+    expect(transitionVariableUsage(selectionRoute, "selectedAnswer")).toEqual([
+      "Changes value",
+    ]);
+  });
+
+  it("edits an operator-permitted value and shows it in the mounted preview", () => {
+    localStorage.clear();
+    const view = render(<FlowLab />);
+
+    fireEvent.change(view.container.querySelector(".reference-picker")!, {
+      target: { value: "blank" },
+    });
+    const variableButton = Array.from(
+      view.container.querySelectorAll<HTMLButtonElement>(
+        ".contract-group > button",
+      ),
+    ).find((button) => button.textContent?.includes("headline"))!;
+    fireEvent.click(variableButton);
+
+    expect(screen.getByText("Generated data row: headline")).toBeInTheDocument();
+    expect(screen.getByText("Every state")).toBeInTheDocument();
+    fireEvent.change(
+      screen.getByLabelText("Current preview value for Headline"),
+      { target: { value: "Breaking news" } },
+    );
+
+    expect(screen.getAllByText("Breaking news").length).toBeGreaterThan(0);
   });
 });

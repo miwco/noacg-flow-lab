@@ -170,7 +170,15 @@ Show the message beneath the Event field: the operator button appears only when 
 
 ### On screen
 
-Select the **Name** and **Role** variables under Data contracts.
+Select the **Name** variable under Data contracts. Point to:
+
+- Connected output: Primary name text
+- Visibility: On air in IN and HOLD
+- Current preview value
+- The direct preview-value editor
+- Any transition cards labeled Reads condition, Reads value, or Changes value
+
+Change the current preview value while OFF, press **Show in preview**, and verify that the lower-third name changes without changing state. Repeat briefly with **Role**.
 
 Then show **Graphic connection - What the renderer receives**.
 
@@ -187,7 +195,9 @@ Point to:
 
 Variables do not attach directly to states. Transition conditions may read them and Set variable actions may change them. The renderer decides which visual slots consume them.
 
-For this prototype, the reference lower-third renderer is pre-wired: the name variable feeds the name text and the role variable feeds the role text. The generic blank-flow preview displays every variable in every state. State-specific visual slot and visibility binding is not implemented yet and belongs to the future design layer."
+The selected variable now names its exact pre-wired output and when that output is visible. Its transition cards distinguish logic that reads the value from logic that changes it. Operator-editable data can be changed here while the graphic is in its initial state, then checked immediately in Preview.
+
+The generic blank-flow renderer displays every variable in every state, so a new headline works without a separate connection step. If you add a variable to a specialized reference renderer that does not consume it, Flow marks it Not mapped instead of implying that it is on air. Creating new visual slots remains a responsibility of the future design layer."
 
 ## Scene 9 - Verify the modification
 
@@ -221,6 +231,8 @@ Show the starting project:
 - One headline variable
 - No transitions
 - Generic renderer contract preview
+
+Select **Headline** and show **Generated data row: headline**, **Every state**, and the current preview-value editor. Change the value before creating the first transition and verify it in Preview.
 
 Press **State**, rename it `ON AIR`, and describe it.
 

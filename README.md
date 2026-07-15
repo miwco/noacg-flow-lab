@@ -20,7 +20,7 @@ The reference project is an original, broadcast-inspired quiz graphic. It implem
 - Explicit Add state and Add transition commands open complete drafts in one stable Inspector. A new transition appears immediately as a dashed amber graph edge, then becomes a solid saved route only when explicitly created. Visible handles remain an optional faster connection method.
 - Native SVG transition edges use thicker click targets and event labels; clicking the line reopens its Inspector. Event and variable inspectors also link back to every transition that uses them.
 - The transition editor can stage and assign a new operator event inline, while explaining that its button becomes visible only when that transition is legal from the current state.
-- The Graphic connection panel explains the state, variable, and named-animation contract received by the continuously mounted renderer.
+- Selecting a variable shows its exact renderer slot, when that slot is visible, its current preview value, and every transition that reads or changes it. The Graphic connection panel summarizes the full contract received by the continuously mounted renderer.
 - Projects persist in browser local storage and can be exported/imported as readable JSON.
 - Transition edits are staged, summarized, type-aware, and checked for impossible or duplicate routes before save.
 - Permitted runtime data can be prepared before Take without turning data changes into state transitions.
@@ -88,8 +88,8 @@ Import this repository into Vercel, select the default Next.js preset, and deplo
 - The quiz preview is a reference renderer, not a general design editor.
 - Conditions deliberately stop at one AND/OR group and do not allow arbitrary scripts or nested expressions.
 - Actions are typed but only preview-facing animation and variable actions are demonstrated.
-- Reference renderers are still pre-wired. Editable design-layer slot binding remains future work, but the contract and current mappings are visible to authors.
-- The generic blank-flow preview displays every variable in every state; state-specific visual slot and visibility binding is not implemented yet.
+- Reference renderers are still pre-wired. Editable design-layer slot binding remains future work, but each selected variable identifies its current mapping or is explicitly marked as unmapped.
+- The generic blank-flow preview automatically displays every variable in every state, so new data can be authored and tested without a separate binding step.
 - The standalone HTML player proves portable Flow JSON execution and reference rendering, but is not a playout-system compatibility claim.
 
 ## Direction

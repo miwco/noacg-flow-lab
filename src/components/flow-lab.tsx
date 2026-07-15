@@ -1290,18 +1290,46 @@ export default function FlowLab({
                   <VariableRelationship
                     variable={selectedVariable}
                     project={project}
+                    runtime={runtime}
                     onSelectTransition={selectTransition}
+                    onRuntimeChange={(value) => {
+                      const result = updateRuntimeVariable(
+                        project,
+                        runtime,
+                        selectedVariable.id,
+                        value,
+                      );
+                      setRuntime(result.runtime);
+                      setNotice(
+                        result.ok
+                          ? `${selectedVariable.label} preview value updated.`
+                          : result.reason,
+                      );
+                    }}
+                    onShowPreview={() => setTab("preview")}
                   />
                   <VariableContractEditor
                     variable={selectedVariable}
-                    onChange={(next) =>
+                    onChange={(next) => {
                       setProject((current) => ({
                         ...current,
                         variables: current.variables.map((item) =>
                           item.id === selectedVariable.id ? next : item,
                         ),
-                      }))
-                    }
+                      }));
+                      if (
+                        next.type !== selectedVariable.type ||
+                        next.defaultValue !== selectedVariable.defaultValue
+                      ) {
+                        setRuntime((current) => ({
+                          ...current,
+                          variables: {
+                            ...current.variables,
+                            [next.id]: next.defaultValue,
+                          },
+                        }));
+                      }
+                    }}
                   />
                 </>
               )}
@@ -1549,35 +1577,113 @@ function transitionUsesVariable(
   transition: FlowTransition,
   variableId: string,
 ) {
+  return transitionVariableUsage(transition, variableId).length > 0;
+}
+
+export function transitionVariableUsage(
+  transition: FlowTransition,
+  variableId: string,
+) {
+  const usage = new Set<string>();
   const conditionUse = transition.condition?.predicates.some(
     (predicate) =>
       referenceUsesVariable(predicate.left, variableId) ||
       referenceUsesVariable(predicate.right, variableId),
   );
-  const actionUse = transition.actions.some((action) => {
-    if (action.type === "set-variable")
-      return (
-        action.variable === variableId ||
-        referenceUsesVariable(action.value, variableId)
-      );
-    if (action.type === "emit")
-      return Object.values(action.data ?? {}).some((value) =>
+  if (conditionUse) usage.add("Reads condition");
+  transition.actions.forEach((action) => {
+    if (action.type === "set-variable") {
+      if (action.variable === variableId) usage.add("Changes value");
+      if (referenceUsesVariable(action.value, variableId))
+        usage.add("Reads value");
+    }
+    if (
+      action.type === "emit" &&
+      Object.values(action.data ?? {}).some((value) =>
         referenceUsesVariable(value, variableId),
-      );
-    return false;
+      )
+    )
+      usage.add("Reads for emitted event");
   });
-  return conditionUse || actionUse;
+  return [...usage];
+}
+
+export function rendererVariableConnection(
+  project: FlowProject,
+  variable: FlowVariable,
+) {
+  const renderer = project.metadata?.renderer ?? "generic";
+  if (renderer === "generic")
+    return {
+      renderer,
+      connected: true,
+      slot: `Generated data row: ${variable.id}`,
+      visibility: "Every state",
+      explanation:
+        "The blank-flow renderer automatically shows every variable. No state connection is required.",
+    };
+  if (renderer === "lower-third" && variable.id === "name")
+    return {
+      renderer,
+      connected: true,
+      slot: "Primary name text",
+      visibility: "On air in IN and HOLD",
+      explanation:
+        "The lower-third reference renderer reads this value continuously.",
+    };
+  if (renderer === "lower-third" && variable.id === "role")
+    return {
+      renderer,
+      connected: true,
+      slot: "Secondary role text",
+      visibility: "On air in IN and HOLD",
+      explanation:
+        "The lower-third reference renderer reads this value continuously.",
+    };
+  if (renderer === "quiz" && variable.id === "selectedAnswer")
+    return {
+      renderer,
+      connected: true,
+      slot: "Selected answer highlight",
+      visibility: "QUESTION through RESULT when a value is set",
+      explanation:
+        "Quiz transitions change this value when the operator selects an answer.",
+    };
+  if (renderer === "quiz" && variable.id === "correctAnswer")
+    return {
+      renderer,
+      connected: true,
+      slot: "Correct-answer reveal",
+      visibility: "RESULT state",
+      explanation:
+        "The quiz renderer compares this value with the selected answer during Reveal.",
+    };
+  return {
+    renderer,
+    connected: false,
+    slot: "No visual slot in this reference renderer",
+    visibility: "Not rendered",
+    explanation:
+      "The variable is valid Flow data, but this pre-wired reference renderer does not consume it.",
+  };
 }
 
 function VariableRelationship({
   variable,
   project,
+  runtime,
   onSelectTransition,
+  onRuntimeChange,
+  onShowPreview,
 }: {
   variable: FlowVariable;
   project: FlowProject;
+  runtime: RuntimeState;
   onSelectTransition: (id: string) => void;
+  onRuntimeChange: (value: FlowValue) => void;
+  onShowPreview: () => void;
 }) {
+  const connection = rendererVariableConnection(project, variable);
   const routes = project.transitions.filter((transition) =>
     transitionUsesVariable(transition, variable.id),
   );
@@ -1595,11 +1701,51 @@ function VariableRelationship({
         <i>→</i>
         <b>Renderer data</b>
       </div>
+      <div
+        className={`renderer-variable-slot ${
+          connection.connected ? "connected" : "unmapped"
+        }`}
+      >
+        <small>{connection.connected ? "CONNECTED OUTPUT" : "NOT MAPPED"}</small>
+        <strong>{connection.slot}</strong>
+        <span>{connection.visibility}</span>
+        <p>{connection.explanation}</p>
+      </div>
+      <div className="variable-preview-value">
+        <span>
+          <small>CURRENT PREVIEW VALUE</small>
+          <b>
+            {runtime.variables[variable.id] === null
+              ? "-"
+              : String(runtime.variables[variable.id])}
+          </b>
+        </span>
+        {variable.operatorEditable &&
+        runtime.stateId === project.initialStateId ? (
+          <RuntimeValueInput
+            variable={variable}
+            value={runtime.variables[variable.id]}
+            onChange={onRuntimeChange}
+            ariaLabel={`Current preview value for ${variable.label}`}
+          />
+        ) : (
+          <small>
+            {variable.operatorEditable
+              ? "Return to the initial state to edit this value."
+              : "Transition logic controls this runtime value."}
+          </small>
+        )}
+        <button type="button" onClick={onShowPreview}>
+          Show in preview
+        </button>
+      </div>
       {routes.map((route) => (
         <button key={route.id} onClick={() => onSelectTransition(route.id)}>
           <span>{transitionRoute(project, route)}</span>
           <strong>{route.label || route.event}</strong>
-          <small>Uses this variable</small>
+          <small>
+            {transitionVariableUsage(route, variable.id).join(" + ")}
+          </small>
         </button>
       ))}
       {!routes.length && (
@@ -1608,13 +1754,10 @@ function VariableRelationship({
           Set variable action in a transition to use it in Flow logic.
         </p>
       )}
-      {project.metadata?.renderer === "generic" && (
-        <p className="relationship-limit">
-          The generic preview currently displays every variable in every state.
-          State-specific visual slots and visibility rules are not yet editable
-          in this prototype.
-        </p>
-      )}
+      <p className="relationship-limit">
+        Flow supplies behavior and data. The renderer decides visual placement
+        and visibility, so variables do not need a separate state connection.
+      </p>
     </div>
   );
 }
@@ -3073,16 +3216,19 @@ function RuntimeValueInput({
   variable,
   value,
   onChange,
+  ariaLabel,
 }: {
   variable: FlowVariable;
   value: FlowValue;
   onChange: (value: FlowValue) => void;
+  ariaLabel?: string;
 }) {
   if (variable.options?.length || variable.type === "boolean") {
     const options = variable.options?.length ? variable.options : [true, false];
     return (
       <select
         className="runtime-input"
+        aria-label={ariaLabel}
         value={String(value ?? "")}
         onChange={(event) =>
           onChange(
@@ -3105,6 +3251,7 @@ function RuntimeValueInput({
   return (
     <input
       className="runtime-input"
+      aria-label={ariaLabel}
       type={variable.type === "number" ? "number" : "text"}
       min={variable.minimum}
       max={variable.maximum}
