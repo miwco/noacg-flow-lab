@@ -131,13 +131,13 @@ Rename it `FEATURED` and describe it as:
 
 `The guest strap is emphasized on air.`
 
-Press **Add transition** above the graph. Point out the **New transition - not created** heading. Choose HOLD as the source and FEATURED as the destination, then press **Create transition**.
+Press **Add transition** above the graph. Point out the **New transition - not created** heading and the dashed amber **NEW** edge that appears between the source and destination states. Choose HOLD as the source and FEATURED as the destination and show that the draft edge follows those choices. Then press **Create transition** and point out that the route becomes solid.
 
 ### Narration
 
 "Creating a state no longer asks for hidden setup in a browser prompt. It creates a draft state and opens the exact fields that need attention.
 
-The explicit Add transition command opens a clearly marked draft. The route does not become part of the project until you press Create transition. Cancel new transition leaves the existing Flow unchanged. Dragging between visible handles remains an optional faster method once the graph is familiar."
+The explicit Add transition command opens a clearly marked draft. Its dashed edge lets you see the proposed connection, but the route does not become part of the project until you press Create transition. Cancel new transition removes the draft edge and leaves the existing Flow unchanged. Dragging between visible handles remains an optional faster method once the graph is familiar."
 
 ## Scene 7 - Define what makes the route legal
 
@@ -224,7 +224,7 @@ Show the starting project:
 
 Press **State**, rename it `ON AIR`, and describe it.
 
-Press **Add transition**. The first route starts at OFF and targets the new ON AIR state. Configure it to use TAKE and add the animation action `graphic-in`. Save it.
+Press **Add transition**. The first route starts at OFF and targets the new ON AIR state. A dashed amber edge shows the unsaved route while you configure it. Set it to use TAKE, add the animation action `graphic-in`, and create it. The edge becomes solid when it is saved.
 
 ### Narration
 

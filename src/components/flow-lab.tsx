@@ -99,31 +99,44 @@ function StateNode({ data }: NodeProps<Node<StateData>>) {
 }
 const nodeTypes = { state: StateNode };
 
+export function graphTransitions(
+  saved: FlowTransition[],
+  pending: FlowTransition | null,
+) {
+  return pending ? [...saved, pending] : saved;
+}
+
 export function createNativeTransitionEdge(
   transition: FlowTransition,
   eventLabel: string,
   selected: boolean,
   fired: boolean,
+  draft = false,
 ): Edge {
+  const emphasized = selected || draft;
   return {
     id: transition.id,
     source: transition.from,
     target: transition.to,
-    animated: fired,
+    animated: fired && !draft,
     markerEnd: { type: MarkerType.ArrowClosed },
     interactionWidth: 36,
-    className: `${selected ? "flow-edge-selected" : ""} ${fired ? "flow-edge-fired" : ""}`,
-    style: { strokeWidth: selected ? 4 : 3 },
-    label: eventLabel,
+    className: `${selected ? "flow-edge-selected" : ""} ${fired ? "flow-edge-fired" : ""} ${draft ? "flow-edge-draft" : ""}`,
+    style: {
+      stroke: draft ? "#f6bc56" : undefined,
+      strokeDasharray: draft ? "8 6" : undefined,
+      strokeWidth: emphasized ? 4 : 3,
+    },
+    label: draft ? `NEW - ${eventLabel}` : eventLabel,
     labelStyle: {
-      fill: selected ? "#ffe0a3" : "#d7e4ff",
+      fill: emphasized ? "#ffe0a3" : "#d7e4ff",
       fontSize: 10,
       fontWeight: 800,
     },
     labelBgStyle: {
-      fill: selected ? "#302a20" : "#10172b",
+      fill: emphasized ? "#302a20" : "#10172b",
       fillOpacity: 0.98,
-      stroke: selected ? "#f6bc56" : "#5677af",
+      stroke: emphasized ? "#f6bc56" : "#5677af",
       strokeWidth: 1,
     },
     labelBgPadding: [7, 5],
@@ -326,7 +339,7 @@ export default function FlowLab({
   );
   const edges = useMemo<Edge[]>(
     () =>
-      project.transitions
+      graphTransitions(project.transitions, pendingTransition)
         .filter((item) => item.from !== "*")
         .map((item) => {
           const selected =
@@ -339,9 +352,16 @@ export default function FlowLab({
             eventLabel,
             selected,
             runtime.lastTransitionId === item.id,
+            pendingTransition?.id === item.id,
           );
         }),
-    [project.events, project.transitions, runtime.lastTransitionId, selection],
+    [
+      pendingTransition,
+      project.events,
+      project.transitions,
+      runtime.lastTransitionId,
+      selection,
+    ],
   );
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
@@ -496,7 +516,7 @@ export default function FlowLab({
       project.states.find((item) => item.id === project.initialStateId) ??
       project.states[0];
     const position = {
-      x: (anchor?.position.x ?? 0) + 220,
+      x: (anchor?.position.x ?? 0) + 300,
       y: anchor?.position.y ?? 170,
     };
     while (
@@ -582,7 +602,7 @@ export default function FlowLab({
     });
     setSelection({ kind: "transition", id: transitionId });
     setNotice(
-      "New transition opened. Configure it, then press Create transition.",
+      "New transition opened as a dashed amber line. Configure it, then press Create transition.",
     );
   }
   function addVariable() {
@@ -924,7 +944,11 @@ export default function FlowLab({
             <span>
               <i className="dot fired" /> Last transition
             </span>
-            <span>Click a transition label to edit logic</span>
+            <span>
+              {pendingTransition
+                ? "Dashed amber line: unsaved transition"
+                : "Click a transition label to edit logic"}
+            </span>
             <span>Ctrl + wheel to zoom</span>
             <span>Minimap: drag to navigate, wheel to zoom</span>
             <span>Mode: {mode}</span>

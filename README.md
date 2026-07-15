@@ -17,7 +17,7 @@ The reference project is an original, broadcast-inspired quiz graphic. It implem
 - The state graph highlights the live state and most recently fired transition.
 - States, transitions, variables, conditions, and actions can be inspected. State names and descriptions are editable; states and variables can be added; nodes can be moved; graph handles create new connections.
 - Guided authoring starts by modifying a working reference and can continue from a deliberately minimal blank Flow.
-- Explicit Add state and Add transition commands open complete drafts in one stable Inspector. New transitions remain separate from the project until explicitly created or canceled. Visible handles remain an optional faster connection method.
+- Explicit Add state and Add transition commands open complete drafts in one stable Inspector. A new transition appears immediately as a dashed amber graph edge, then becomes a solid saved route only when explicitly created. Visible handles remain an optional faster connection method.
 - Native SVG transition edges use thicker click targets and event labels; clicking the line reopens its Inspector. Event and variable inspectors also link back to every transition that uses them.
 - Operator-action creation explains that an event becomes a visible legal control only through a transition from the current state.
 - The Graphic connection panel explains the state, variable, and named-animation contract received by the continuously mounted renderer.

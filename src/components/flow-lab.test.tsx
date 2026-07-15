@@ -3,7 +3,10 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import FlowLab, { createNativeTransitionEdge } from "./flow-lab";
+import FlowLab, {
+  createNativeTransitionEdge,
+  graphTransitions,
+} from "./flow-lab";
 
 beforeAll(() => {
   class ResizeObserverMock {
@@ -41,14 +44,12 @@ describe("FlowLab transition creation", () => {
     expect(
       screen.getByText("No transitions yet.", { exact: false }),
     ).toBeInTheDocument();
-
     fireEvent.click(
       screen.getByRole("button", { name: "Cancel new transition" }),
     );
     expect(
       screen.queryByText("New transition - not created"),
     ).not.toBeInTheDocument();
-
     fireEvent.click(
       screen.getAllByRole("button", { name: "Add transition" })[0],
     );
@@ -80,11 +81,36 @@ describe("FlowLab transition creation", () => {
       "Take",
       true,
       false,
+      false,
     );
 
     expect(edge.type).toBeUndefined();
     expect(edge.label).toBe("Take");
     expect(edge.interactionWidth).toBe(36);
     expect(edge.style).toMatchObject({ strokeWidth: 4 });
+  });
+
+  it("marks an unsaved transition as a dashed native draft edge", () => {
+    const pending = {
+      id: "draft-take-in",
+      from: "off",
+      to: "in",
+      event: "TAKE",
+      priority: 0,
+      label: "Take in",
+      actions: [],
+    };
+    const edge = createNativeTransitionEdge(pending, "Take", true, false, true);
+
+    expect(edge.type).toBeUndefined();
+    expect(edge.label).toBe("NEW - Take");
+    expect(edge.style).toMatchObject({
+      stroke: "#f6bc56",
+      strokeDasharray: "8 6",
+      strokeWidth: 4,
+    });
+    expect(edge.animated).toBe(false);
+    expect(graphTransitions([], pending)).toEqual([pending]);
+    expect(graphTransitions([], null)).toEqual([]);
   });
 });
